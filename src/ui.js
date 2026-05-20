@@ -290,7 +290,11 @@ export class UIManager {
       card.addEventListener('click', () => {
         this.selectedRacer = marble;
         document.getElementById('screen-racer-picker').classList.add('hidden');
-        this.changeScreen('arena');
+        if (this.currentScreen === 'menu' || this.currentScreen === 'browser') {
+          this.updateRacerHudDisplay();
+        } else {
+          this.changeScreen('arena');
+        }
         this.showToast(`Selected Ball: ${marble.name}`);
       });
       
@@ -354,6 +358,11 @@ export class UIManager {
     });
 
     // --- Screen: Main Menu Navigation ---
+    document.getElementById('menu-btn-garage').addEventListener('click', () => {
+      // Show racer picker modal
+      document.getElementById('screen-racer-picker').classList.remove('hidden');
+    });
+
     document.getElementById('menu-btn-play').addEventListener('click', () => {
       this.changeScreen('browser');
       this.refreshMapsList();
@@ -375,6 +384,10 @@ export class UIManager {
         document.getElementById('fb-appId').value = config.appId || '';
       }
       document.getElementById('firebase-modal').classList.remove('hidden');
+    });
+
+    document.getElementById('menu-btn-multiplayer').addEventListener('click', () => {
+      this.showToast("Multiplayer is coming in Season 4! Peer-to-peer matchmaking is currently in development.");
     });
 
     // --- Screen: Play Browser Navigation ---
@@ -491,6 +504,11 @@ export class UIManager {
     document.getElementById('btn-reset-marbles').addEventListener('click', () => {
       // Pop the chooser screen
       document.getElementById('screen-racer-picker').classList.remove('hidden');
+    });
+
+    // Racer selector close button
+    document.getElementById('racer-picker-close').addEventListener('click', () => {
+      document.getElementById('screen-racer-picker').classList.add('hidden');
     });
 
     // Sliders

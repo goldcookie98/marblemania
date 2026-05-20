@@ -9,8 +9,8 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
   <!-- Stylesheet -->
-  <script type="module" crossorigin src="/assets/index-BkMhO_uy.js"></script>
-  <link rel="stylesheet" crossorigin href="/assets/index-C7oPH34W.css">
+  <script type="module" crossorigin src="/assets/index-CZAx9Qva.js"></script>
+  <link rel="stylesheet" crossorigin href="/assets/index-WQYeD_4q.css">
 </head>
 <body>
   <div id="app">
@@ -27,27 +27,78 @@
 
     <!-- 1. SCREEN: MAIN MENU -->
     <div id="screen-menu" class="screen-overlay">
-      <div class="menu-container glass-panel">
-        <div class="menu-header">
-          <div class="glow-logo">⚪</div>
-          <h1>MARBLE MANIA</h1>
-          <p class="subtitle">Algodoo Physics Sandbox</p>
-        </div>
-        <div class="menu-buttons">
-          <button id="menu-btn-play" class="menu-btn-primary pulse-border">
-            <span class="btn-icon">🏁</span> Play Tracks
-          </button>
-          <button id="menu-btn-build" class="menu-btn-secondary">
-            <span class="btn-icon">✏️</span> Build a Track
-          </button>
-          <button id="menu-btn-cloud" class="menu-btn-secondary">
-            <span class="btn-icon">⚙️</span> Cloud Sync Setup
-          </button>
-        </div>
-        <div class="menu-footer">
-          <span id="menu-firebase-badge" class="badge badge-offline">Offline</span>
-          <span class="copyright">V1.2 - Algodoo Flat Edition</span>
-        </div>
+      <div class="menu-connection-status">
+        <span id="menu-firebase-badge" class="badge badge-offline">Offline</span>
+      </div>
+      
+      <div class="poly-title-container">
+        <h1 class="poly-title">Marble Mania</h1>
+      </div>
+      
+      <div class="poly-menu-buttons">
+        <button id="menu-btn-garage" class="poly-btn">
+          <div class="poly-btn-icon">
+            <svg viewBox="0 0 100 100" fill="currentColor">
+              <rect x="15" y="15" width="12" height="20" rx="3" />
+              <rect x="73" y="15" width="12" height="20" rx="3" />
+              <rect x="15" y="65" width="12" height="20" rx="3" />
+              <rect x="73" y="65" width="12" height="20" rx="3" />
+              <rect x="25" y="23" width="50" height="4" />
+              <rect x="25" y="73" width="50" height="4" />
+              <path d="M40 10 h20 l6 20 v50 l-6 10 h-20 l-6 -10 v-50 z" />
+              <rect x="25" y="82" width="50" height="6" />
+            </svg>
+          </div>
+          <span class="poly-btn-label">Garage</span>
+        </button>
+
+        <button id="menu-btn-build" class="poly-btn">
+          <div class="poly-btn-icon">
+            <svg viewBox="0 0 100 100" fill="currentColor">
+              <rect x="25" y="20" width="8" height="65" />
+              <rect x="25" y="20" width="50" height="6" />
+              <rect x="33" y="12" width="12" height="8" />
+              <polygon points="25,40 45,26 42,26 25,35" />
+              <rect x="58" y="60" width="22" height="25" fill="none" stroke="currentColor" stroke-width="6" />
+              <rect x="66" y="40" width="14" height="20" fill="none" stroke="currentColor" stroke-width="6" />
+              <line x1="25" y1="35" x2="33" y2="35" stroke="currentColor" stroke-width="3" />
+              <line x1="25" y1="50" x2="33" y2="50" stroke="currentColor" stroke-width="3" />
+              <line x1="25" y1="65" x2="33" y2="65" stroke="currentColor" stroke-width="3" />
+            </svg>
+          </div>
+          <span class="poly-btn-label">Editor</span>
+        </button>
+
+        <button id="menu-btn-cloud" class="poly-btn">
+          <div class="poly-btn-icon">
+            <svg viewBox="0 0 100 100" fill="currentColor">
+              <path d="M50 35a15 15 0 1 0 15 15 15 15 0 0 0-15-15zm38.5 10.6l-8-.7a29.8 29.8 0 0 0-3.5-8.4l5.1-6.2a3 3 0 0 0-.2-4l-5.7-5.7a3 3 0 0 0-4-.2L66 35.5a29.8 29.8 0 0 0-8.4-3.5l-.7-8a3 3 0 0 0-3-2.7H46.1a3 3 0 0 0-3 2.7l-.7 8a29.8 29.8 0 0 0-8.4 3.5l-6.2-5.1a3 3 0 0 0-4 .2l-5.7 5.7a3 3 0 0 0-.2 4l5.1 6.2a29.8 29.8 0 0 0-3.5 8.4l-8 .7a3 3 0 0 0-2.7 3v8.1a3 3 0 0 0 2.7 3l8 .7a29.8 29.8 0 0 0 3.5 8.4l-5.1 6.2a3 3 0 0 0 .2 4l5.7 5.7a3 3 0 0 0 4 .2l6.2-5.1a29.8 29.8 0 0 0 8.4 3.5l.7 8a3 3 0 0 0 3-2.7h7.8a3 3 0 0 0 3-2.7l.7-8a29.8 29.8 0 0 0 8.4-3.5l6.2 5.1a3 3 0 0 0 4-.2l5.7-5.7a3 3 0 0 0 .2-4l-5.1-6.2a29.8 29.8 0 0 0 3.5-8.4l8-.7a3 3 0 0 0 2.7-3v-8.1a3 3 0 0 0-2.7-3zM50 65a15 15 0 1 1 15-15 15 15 0 0 1-15 15z" />
+            </svg>
+          </div>
+          <span class="poly-btn-label">Settings</span>
+        </button>
+
+        <button id="menu-btn-multiplayer" class="poly-btn">
+          <div class="poly-btn-icon">
+            <svg viewBox="0 0 100 100" fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="50" cy="50" r="40" />
+              <path d="M10 50h80M50 10v80" stroke-width="6" />
+              <path d="M50 10a30 30 0 0 0 0 80 30 30 0 0 0 0-80" stroke-width="4.5" />
+              <path d="M50 10a56 56 0 0 0 0 80 56 56 0 0 0 0-80" stroke-width="3" />
+              <path d="M15 30h70M15 70h70" stroke-width="4.5" />
+            </svg>
+          </div>
+          <span class="poly-btn-label">Multiplayer</span>
+        </button>
+
+        <button id="menu-btn-play" class="poly-btn">
+          <div class="poly-btn-icon">
+            <svg viewBox="0 0 100 100" fill="currentColor">
+              <polygon points="30,20 85,50 30,80" />
+            </svg>
+          </div>
+          <span class="poly-btn-label">Play</span>
+        </button>
       </div>
     </div>
 
@@ -224,6 +275,7 @@
     <!-- 5. SCREEN: RACER SELECTION MODAL (POP AT PLAY START) -->
     <div id="screen-racer-picker" class="screen-overlay hidden">
       <div class="picker-container glass-panel">
+        <button id="racer-picker-close" class="modal-close-btn">&times;</button>
         <div class="picker-header">
           <h2>PICK YOUR RACER</h2>
           <p class="picker-note">
