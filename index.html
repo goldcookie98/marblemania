@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Marble Mania - Algodoo Marble Race Sandbox</title>
+  <!-- Google Fonts: Outfit -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <!-- Stylesheet -->
+  <link rel="stylesheet" href="/src/style.css">
+</head>
+<body>
+  <div id="app">
+    <!-- Canvas for Physics rendering -->
+    <canvas id="gameCanvas"></canvas>
+
+    <!-- Canvas Instruction HUD -->
+    <div class="hud-instructions">
+      <span><kbd>Left Click + Drag</kbd> Draw / Interact</span>
+      <span><kbd>Right Click + Drag</kbd> Pan Map</span>
+      <span><kbd>Scroll Wheel</kbd> Zoom</span>
+    </div>
+
+    <!-- Left Controls Panel -->
+    <div class="sidebar glass-panel left-panel">
+      <div class="panel-header">
+        <h1>MARBLE MANIA</h1>
+        <p class="subtitle">Physics Sandbox & Race Builder</p>
+      </div>
+
+      <div class="panel-section">
+        <h2 class="section-title">Editor Tools</h2>
+        <div class="tool-grid">
+          <button id="tool-wall" class="tool-btn active" data-tool="wall" title="Draw Bouncing Walls">
+            <span class="tool-icon wall-icon"></span>
+            <span class="tool-label">Wall (Black)</span>
+          </button>
+          <button id="tool-goal" class="tool-btn" data-tool="goal" title="Draw Finish Zones">
+            <span class="tool-icon goal-icon"></span>
+            <span class="tool-label">Goal (Green)</span>
+          </button>
+          <button id="tool-hazard" class="tool-btn" data-tool="hazard" title="Draw Hazard Resets">
+            <span class="tool-icon hazard-icon"></span>
+            <span class="tool-label">Hazard (Red)</span>
+          </button>
+          <button id="tool-spawner" class="tool-btn" data-tool="spawner" title="Place Spawner Point">
+            <span class="tool-icon spawner-icon"></span>
+            <span class="tool-label">Spawner</span>
+          </button>
+          <button id="tool-eraser" class="tool-btn" data-tool="eraser" title="Erase Drawn Elements">
+            <span class="tool-icon eraser-icon"></span>
+            <span class="tool-label">Eraser</span>
+          </button>
+          <button id="tool-pan" class="tool-btn" data-tool="pan" title="Pan and Move viewport">
+            <span class="tool-icon pan-icon"></span>
+            <span class="tool-label">Pan Mode</span>
+          </button>
+        </div>
+
+        <div class="slider-group">
+          <div class="slider-header">
+            <span>Brush Size</span>
+            <span id="brush-size-val">12px</span>
+          </div>
+          <input type="range" id="brush-size" min="4" max="50" value="12" step="2">
+        </div>
+
+        <div class="action-row">
+          <button id="btn-undo" class="action-btn secondary-btn" title="Undo Last Drawing">Undo</button>
+          <button id="btn-clear" class="action-btn danger-btn" title="Clear Canvas">Clear All</button>
+        </div>
+      </div>
+
+      <div class="panel-section">
+        <h2 class="section-title">Race Control</h2>
+        <div class="simulation-controls">
+          <button id="btn-play" class="action-btn primary-btn pulse-border" title="Start Race / Resume Physics">
+            <span class="play-icon"></span> Play Race
+          </button>
+          <button id="btn-reset-marbles" class="action-btn secondary-btn" title="Respawn All Marbles">
+            Reset Marbles
+          </button>
+        </div>
+
+        <div class="slider-group">
+          <div class="slider-header">
+            <span>Marble Count</span>
+            <span id="marble-count-val">10</span>
+          </div>
+          <input type="range" id="marble-count" min="1" max="50" value="10">
+        </div>
+
+        <div class="slider-group">
+          <div class="slider-header">
+            <span>Simulation Speed</span>
+            <span id="physics-speed-val">1x</span>
+          </div>
+          <input type="range" id="physics-speed" min="0.5" max="3.0" value="1.0" step="0.5">
+        </div>
+
+        <div class="settings-group">
+          <div class="control-row">
+            <label for="marble-preset">Visual Preset</label>
+            <select id="marble-preset">
+              <option value="classic">Classic Glow</option>
+              <option value="countries">Country Flags</option>
+              <option value="emoji">Emoji Balls</option>
+              <option value="planets">Solar System</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right Panels (Leaderboard + Sharing) -->
+    <div class="sidebar glass-panel right-panel">
+      <div class="tabs">
+        <button class="tab-btn active" data-tab="leaderboard">Leaderboard</button>
+        <button class="tab-btn" data-tab="sharing">Share Maps</button>
+      </div>
+
+      <!-- Tab 1: Leaderboard -->
+      <div class="tab-content active" id="tab-leaderboard">
+        <div class="leaderboard-header">
+          <span class="rank-col">#</span>
+          <span class="name-col">Marble</span>
+          <span class="status-col">Time / Status</span>
+        </div>
+        <div id="leaderboard-list" class="scrollable-list">
+          <div class="no-data-msg">Race not started. Click "Play Race" to spawn marbles!</div>
+        </div>
+      </div>
+
+      <!-- Tab 2: Sharing -->
+      <div class="tab-content" id="tab-sharing">
+        <!-- Save Map Section -->
+        <div class="panel-subsection">
+          <h3 class="section-title">Save Current Map</h3>
+          <form id="save-map-form">
+            <div class="input-group">
+              <label for="map-name">Map Name</label>
+              <input type="text" id="map-name" placeholder="My Epic Track" required maxlength="30">
+            </div>
+            <div class="input-group">
+              <label for="map-creator">Creator Name</label>
+              <input type="text" id="map-creator" placeholder="Marble Racer" required maxlength="20">
+            </div>
+            <button type="submit" class="action-btn primary-btn">Save to List</button>
+          </form>
+        </div>
+
+        <!-- Saved / Shared Maps List -->
+        <div class="panel-subsection flex-grow">
+          <div class="section-header-row">
+            <h3 class="section-title">Explore Maps</h3>
+            <button id="btn-refresh-maps" class="refresh-btn" title="Refresh List">↻</button>
+          </div>
+          <div class="search-bar">
+            <input type="text" id="map-search" placeholder="Search maps...">
+          </div>
+          <div id="shared-maps-list" class="scrollable-list">
+            <!-- Dynamically populated -->
+          </div>
+        </div>
+
+        <!-- Firebase Config Toggle -->
+        <div class="firebase-status-bar">
+          <span id="firebase-status-badge" class="badge badge-offline">Offline Storage</span>
+          <button id="btn-open-firebase-config" class="link-btn">Setup Cloud Sync</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Firebase Connection Settings Modal -->
+    <div id="firebase-modal" class="modal-overlay hidden">
+      <div class="modal-content glass-panel">
+        <button id="modal-close" class="modal-close-btn">&times;</button>
+        <h2>Connect Firebase Cloud Sync</h2>
+        <p class="modal-description">
+          Provide your Firebase Project credentials to sync maps directly to the Cloud database. Maps will be shared instantly with all players globally!
+        </p>
+        <form id="firebase-config-form">
+          <div class="input-group">
+            <label for="fb-apiKey">API Key</label>
+            <input type="text" id="fb-apiKey" required placeholder="AIzaSy...">
+          </div>
+          <div class="input-row">
+            <div class="input-group">
+              <label for="fb-authDomain">Auth Domain</label>
+              <input type="text" id="fb-authDomain" required placeholder="project-id.firebaseapp.com">
+            </div>
+            <div class="input-group">
+              <label for="fb-projectId">Project ID</label>
+              <input type="text" id="fb-projectId" required placeholder="project-id">
+            </div>
+          </div>
+          <div class="input-row">
+            <div class="input-group">
+              <label for="fb-storageBucket">Storage Bucket</label>
+              <input type="text" id="fb-storageBucket" required placeholder="project-id.appspot.com">
+            </div>
+            <div class="input-group">
+              <label for="fb-messagingSenderId">Messaging Sender ID</label>
+              <input type="text" id="fb-messagingSenderId" required placeholder="1234567890">
+            </div>
+          </div>
+          <div class="input-group">
+            <label for="fb-appId">App ID</label>
+            <input type="text" id="fb-appId" required placeholder="1:123456:web:abcd...">
+          </div>
+          <div class="modal-actions">
+            <button type="button" id="btn-fb-clear" class="action-btn danger-btn">Disconnect & Clear</button>
+            <button type="submit" class="action-btn primary-btn">Connect Cloud DB</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Entry Script -->
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
