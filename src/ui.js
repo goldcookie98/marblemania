@@ -7,84 +7,96 @@ import {
   likeMap 
 } from './firebase-db';
 
-export const MARBLE_PRESETS = {
-  classic: Array.from({ length: 50 }, (_, i) => {
-    const hue = (i * 137.5) % 360;
-    return {
-      name: `Glow-${i + 1}`,
-      color: `hsl(${hue}, 100%, 60%)`,
-      emoji: ''
-    };
-  }),
-  countries: [
-    { name: 'USA', color: '#ff4d4d', emoji: '🇺🇸' },
-    { name: 'UK', color: '#3366ff', emoji: '🇬🇧' },
-    { name: 'Canada', color: '#ff3333', emoji: '🇨🇦' },
-    { name: 'Japan', color: '#ffffff', emoji: '🇯🇵' },
-    { name: 'Germany', color: '#ffcc00', emoji: '🇩🇪' },
-    { name: 'France', color: '#3399ff', emoji: '🇫🇷' },
-    { name: 'Australia', color: '#003399', emoji: '🇦🇺' },
-    { name: 'Brazil', color: '#00cc66', emoji: '🇧🇷' },
-    { name: 'India', color: '#ff9933', emoji: '🇮🇳' },
-    { name: 'Spain', color: '#ffc107', emoji: '🇪🇸' },
-    { name: 'Italy', color: '#4caf50', emoji: '🇮🇹' },
-    { name: 'Mexico', color: '#2e7d32', emoji: '🇲🇽' },
-    { name: 'South Korea', color: '#e0e0e0', emoji: '🇰🇷' },
-    { name: 'Netherlands', color: '#ff6600', emoji: '🇳🇱' },
-    { name: 'Sweden', color: '#0080ff', emoji: '🇸🇪' },
-    { name: 'Switzerland', color: '#ff4d4d', emoji: '🇨🇭' },
-    { name: 'Argentina', color: '#80d8ff', emoji: '🇦🇷' },
-    { name: 'South Africa', color: '#43a047', emoji: '🇿🇦' },
-    { name: 'Jamaica', color: '#ffd600', emoji: '🇯🇲' },
-    { name: 'New Zealand', color: '#212121', emoji: '🇳🇿' }
-  ].concat(Array.from({ length: 30 }, (_, i) => ({
-    name: `Racer-${i + 21}`,
-    color: '#00f2fe',
-    emoji: '🏳️'
-  }))),
-  emoji: [
-    { name: 'Fox', color: '#ff9800', emoji: '🦊' },
-    { name: 'Lion', color: '#ffc107', emoji: '🦁' },
-    { name: 'Tiger', color: '#ffb300', emoji: '🐯' },
-    { name: 'Frog', color: '#8bc34a', emoji: '🐸' },
-    { name: 'Octopus', color: '#e91e63', emoji: '🐙' },
-    { name: 'Unicorn', color: '#e040fb', emoji: '🦄' },
-    { name: 'Panda', color: '#ffffff', emoji: '🐼' },
-    { name: 'Koala', color: '#b0bec5', emoji: '🐨' },
-    { name: 'Pig', color: '#f8bbd0', emoji: '🐷' },
-    { name: 'Monkey', color: '#8d6e63', emoji: '🐵' },
-    { name: 'Alien', color: '#00e676', emoji: '👽' },
-    { name: 'Ghost', color: '#e0e0e0', emoji: '👻' },
-    { name: 'Robot', color: '#78909c', emoji: '🤖' },
-    { name: 'Chicken', color: '#ffeb3b', emoji: '🐔' },
-    { name: 'Penguin', color: '#90caf9', emoji: '🐧' },
-    { name: 'Dolphin', color: '#29b6f6', emoji: '🐬' },
-    { name: 'Dragon', color: '#4caf50', emoji: '🐲' },
-    { name: 'Cat', color: '#ffcc80', emoji: '🐱' },
-    { name: 'Dog', color: '#ffe082', emoji: '🐶' },
-    { name: 'Devil', color: '#ef5350', emoji: '😈' }
-  ].concat(Array.from({ length: 30 }, (_, i) => ({
-    name: `Emoji-${i + 21}`,
-    color: '#00f2fe',
-    emoji: '🌀'
-  }))),
-  planets: [
-    { name: 'Sun', color: '#ffea00', emoji: '🌞' },
-    { name: 'Mercury', color: '#9e9e9e', emoji: '🌑' },
-    { name: 'Venus', color: '#ffcc80', emoji: '🪐' },
-    { name: 'Earth', color: '#29b6f6', emoji: '🌍' },
-    { name: 'Mars', color: '#ef5350', emoji: '🔴' },
-    { name: 'Jupiter', color: '#d7ccc8', emoji: '🪐' },
-    { name: 'Saturn', color: '#ffe082', emoji: '🪐' },
-    { name: 'Uranus', color: '#80deea', emoji: '🔵' },
-    { name: 'Neptune', color: '#3f51b5', emoji: '🔵' },
-    { name: 'Moon', color: '#eceff1', emoji: '🌙' }
-  ].concat(Array.from({ length: 40 }, (_, i) => ({
-    name: `Star-${i + 11}`,
-    color: '#ffe600',
-    emoji: '⭐'
-  })))
-};
+// The 78 custom marbles list from reference sheet
+export const CUSTOM_MARBLES = [
+  // Row 1
+  { name: 'Amber', color: '#FF9F00', effect: 'solid' },
+  { name: 'Aqua', color: '#00E5FF', effect: 'solid' },
+  { name: 'Aquamarine', color: '#76FF03', effect: 'solid' },
+  { name: 'Azure', color: '#2979FF', effect: 'solid' },
+  { name: 'Beige', color: '#FFD180', effect: 'solid' },
+  { name: 'Black', color: '#000000', effect: 'solid' },
+  { name: 'Blossom', color: '#FF80AB', effect: 'solid' },
+  { name: 'Blue', color: '#2962FF', effect: 'solid' },
+  { name: 'Brick', color: '#D84315', effect: 'solid' },
+  { name: 'Bronze', color: '#A1887F', effect: 'solid' },
+  { name: 'Brown', color: '#6D4C41', effect: 'solid' },
+  { name: 'Burgundy', color: '#880E4F', effect: 'solid' },
+  { name: 'Cerulean', color: '#0091EA', effect: 'solid' },
+  { name: 'Charcoal', color: '#37474F', effect: 'solid' },
+  { name: 'Chartreuse', color: '#AEEA00', effect: 'solid' },
+  { name: 'Clover', color: '#00E676', effect: 'solid' },
+  
+  // Row 2
+  { name: 'Cobalt', color: '#1A237E', effect: 'solid' },
+  { name: 'Cornflower', color: '#82B1FF', effect: 'solid' },
+  { name: 'Cream', color: '#FFF8E1', effect: 'solid' },
+  { name: 'Crimson', color: '#D50000', effect: 'solid' },
+  { name: 'Cyprus', color: '#004D40', effect: 'solid' },
+  { name: 'Ebony', color: '#212121', effect: 'solid' },
+  { name: 'Fern', color: '#4CAF50', effect: 'solid' },
+  { name: 'Forest', color: '#1B5E20', effect: 'solid' },
+  { name: 'Fuchsia', color: '#FF00FF', effect: 'solid' },
+  { name: 'Gold', color: '#FFD700', effect: 'solid' },
+  { name: 'Goldenrod', color: '#FFA000', effect: 'solid' },
+  { name: 'Green', color: '#008000', effect: 'solid' },
+  { name: 'Ice', color: '#E0F7FA', effect: 'solid' },
+  { name: 'Indigo', color: '#303F9F', effect: 'solid' },
+  { name: 'Ivory', color: '#FFFFF0', effect: 'solid' },
+  { name: 'Jade', color: '#00C853', effect: 'solid' },
+
+  // Row 3
+  { name: 'Khaki', color: '#C0CA33', effect: 'solid' },
+  { name: 'Lemon', color: '#FFEA00', effect: 'solid' },
+  { name: 'Lime', color: '#00FF00', effect: 'solid' },
+  { name: 'Magenta', color: '#E91E63', effect: 'solid' },
+  { name: 'Mahogany', color: '#5D4037', effect: 'solid' },
+  { name: 'Maroon', color: '#800000', effect: 'solid' },
+  { name: 'Mauve', color: '#E040FB', effect: 'solid' },
+  { name: 'Midnight', color: '#0A192F', effect: 'solid' },
+  { name: 'Mint', color: '#B2DFDB', effect: 'solid' },
+  { name: 'Moss', color: '#558B2F', effect: 'solid' },
+  { name: 'Navy', color: '#000080', effect: 'solid' },
+  { name: 'Obsidian', color: '#121212', effect: 'solid' },
+  { name: 'Olive', color: '#808000', effect: 'solid' },
+  { name: 'Orchid', color: '#BA68C8', effect: 'solid' },
+  { name: 'Peach', color: '#FFCC80', effect: 'solid' },
+  { name: 'Periwinkle', color: '#B39DDB', effect: 'solid' },
+
+  // Row 4
+  { name: 'Pink', color: '#F48FB1', effect: 'solid' },
+  { name: 'Platinum', color: '#CFD8DC', effect: 'solid' },
+  { name: 'Purple', color: '#800080', effect: 'solid' },
+  { name: 'Royal Blue', color: '#2962FF', effect: 'solid' },
+  { name: 'Royal Purple', color: '#6200EA', effect: 'solid' },
+  { name: 'Salmon', color: '#FF8A80', effect: 'solid' },
+  { name: 'Silver', color: '#C0C0C0', effect: 'solid' },
+  { name: 'Sky', color: '#80DEEA', effect: 'solid' },
+  { name: 'Skyan', color: '#00B0FF', effect: 'solid' },
+  { name: 'Strawberry', color: '#FF5252', effect: 'solid' },
+  { name: 'Tan', color: '#BCAAA4', effect: 'solid' },
+  { name: 'Tangerine', color: '#FF6D00', effect: 'solid' },
+  { name: 'Teal', color: '#008080', effect: 'solid' },
+  { name: 'Tundra', color: '#90A4AE', effect: 'solid' },
+  { name: 'Turquoise', color: '#40E0D0', effect: 'solid' },
+  { name: 'Violet', color: '#EE82EE', effect: 'solid' },
+
+  // Row 5 (Textures/Effects)
+  { name: 'Wheat', color: '#F5DEB3', effect: 'solid' },
+  { name: 'T. Orange', color: 'rgba(255, 109, 0, 0.45)', effect: 'translucent' },
+  { name: 'T. Yellow', color: 'rgba(255, 234, 0, 0.45)', effect: 'translucent' },
+  { name: 'T. Lime', color: 'rgba(0, 255, 0, 0.45)', effect: 'translucent' },
+  { name: 'T. Purple', color: 'rgba(128, 0, 128, 0.45)', effect: 'translucent' },
+  { name: 'T. Magenta', color: 'rgba(233, 30, 99, 0.45)', effect: 'translucent' },
+  { name: 'T. Black', color: 'rgba(0, 0, 0, 0.5)', effect: 'translucent' },
+  { name: 'T. Gray', color: 'rgba(128, 128, 128, 0.45)', effect: 'translucent' },
+  { name: 'T. White', color: 'rgba(255, 255, 255, 0.55)', effect: 'translucent' },
+  { name: 'Light Rainbow', color: '', effect: 'rainbow' },
+  { name: 'T. Rainbow', color: '', effect: 't_rainbow' },
+  { name: 'Dull Rainbow', color: '', effect: 'dull_rainbow' },
+  { name: 'Blurred', color: '#00F2FE', effect: 'blurred' },
+  { name: 'RGB', color: '', effect: 'rgb' }
+];
 
 export class UIManager {
   constructor(simulator, renderer) {
@@ -94,6 +106,10 @@ export class UIManager {
     // Screens routing state: menu, browser, arena, editor
     this.currentScreen = 'menu';
     
+    // Selected Player racer configs
+    this.selectedRacer = CUSTOM_MARBLES[1]; // Default to 'Aqua'
+    this.autoTrackRacer = true;
+
     // Editor State variables
     this.currentTool = 'wall'; 
     this.brushSize = 12;
@@ -106,6 +122,7 @@ export class UIManager {
     this.initEventListeners();
     this.updateCloudStatus();
     this.refreshMapsList();
+    this.buildRacerPickerList();
     
     // Set initial screen state
     this.changeScreen('menu');
@@ -125,6 +142,9 @@ export class UIManager {
         el.classList.add('hidden');
       }
     });
+
+    // Hide overlays by default
+    document.getElementById('screen-racer-picker').classList.add('hidden');
 
     // 2. Manage instruction HUD overlay
     const hudInst = document.getElementById('canvas-hud-instructions');
@@ -164,21 +184,23 @@ export class UIManager {
       this.simulator.marbles = [];
       this.simulator.finishedMarbles = [];
       this.renderer.isTrackingLead = false;
+      this.renderer.playerRacerId = null;
       
-      // Load empty custom layout or preserve current drawings if any
+      // Load empty custom layout or preserve drawings
       if (this.simulator.staticElements.filter(e => e.type !== 'spawner').length === 0) {
         this.simulator.clearAll();
       }
     } else if (screenName === 'arena') {
       // Ready to race
       this.simulator.isPaused = true;
-      this.renderer.isTrackingLead = true; // Auto camera on
+      this.renderer.isTrackingLead = this.autoTrackRacer; 
       
       // Reset play button state
       const playBtn = document.getElementById('btn-play');
       playBtn.innerHTML = '<span class="play-icon"></span> Play Race';
       playBtn.classList.add('pulse-border');
       
+      this.updateRacerHudDisplay();
       this.triggerSpawn();
     }
   }
@@ -187,14 +209,17 @@ export class UIManager {
   async loadBackgroundDemo() {
     this.simulator.isPaused = false;
     this.simulator.physicsSpeed = 1.0;
+    this.renderer.playerRacerId = null; // Clear arrow highlights in main menu
     
     // Fetch and load Pachinko track silently
     const maps = await fetchAllMaps();
     const pachinko = maps.find(m => m.id === 'sample-pachinko');
     if (pachinko) {
       this.simulator.loadMap(pachinko);
-      // Spawn 12 demo marbles
-      this.simulator.spawnMarbles(12, MARBLE_PRESETS.classic);
+      
+      // Just pick random solids for menu backdrop
+      const menuPreset = CUSTOM_MARBLES.filter(m => m.effect === 'solid').slice(0, 15);
+      this.simulator.spawnMarbles(15, menuPreset);
       
       // Periodically loop them automatically in menu screen
       if (this.bgCheckInterval) clearInterval(this.bgCheckInterval);
@@ -204,12 +229,87 @@ export class UIManager {
           return;
         }
         
-        // If all marbles finished or fell past screen, respawn them
         const activeCount = this.simulator.marbles.filter(m => !m.finished).length;
         if (activeCount === 0 || this.simulator.finishedMarbles.length >= 10) {
-          this.simulator.spawnMarbles(12, MARBLE_PRESETS.classic);
+          this.simulator.spawnMarbles(15, menuPreset);
         }
       }, 5000);
+    }
+  }
+
+  // Generate CSS backgrounds for the 78 marble cards
+  getCssBackground(marble) {
+    if (marble.effect === 'solid' || marble.effect === 'translucent') {
+      return marble.color;
+    }
+    if (marble.effect === 'rainbow') {
+      return 'linear-gradient(to right, red, orange, yellow, green, blue, violet)';
+    }
+    if (marble.effect === 't_rainbow') {
+      return 'linear-gradient(to right, rgba(255,0,0,0.5), rgba(0,255,0,0.5), rgba(0,0,255,0.5))';
+    }
+    if (marble.effect === 'dull_rainbow') {
+      return 'linear-gradient(to right, #e8a7a1, #e2c29d, #e5e5a2, #a1dca2, #9ecce2, #ccaee5)';
+    }
+    if (marble.effect === 'rgb') {
+      return 'conic-gradient(red 120deg, green 120deg 240deg, blue 240deg)';
+    }
+    if (marble.effect === 'blurred') {
+      return 'radial-gradient(circle, #00f2fe 30%, transparent 80%)';
+    }
+    return '#fff';
+  }
+
+  // Build Grid items for the 78 marbles picker
+  buildRacerPickerList() {
+    const gridEl = document.getElementById('racer-grid-list');
+    if (!gridEl) return;
+    
+    gridEl.innerHTML = '';
+    
+    CUSTOM_MARBLES.forEach((marble) => {
+      const card = document.createElement('button');
+      card.className = 'racer-card';
+      card.type = 'button';
+      card.title = `Select ${marble.name}`;
+      
+      const circle = document.createElement('div');
+      circle.className = 'racer-circle';
+      circle.style.background = this.getCssBackground(marble);
+      if (marble.effect === 'blurred') {
+        circle.style.filter = 'blur(2px)';
+      }
+      
+      const label = document.createElement('span');
+      label.className = 'racer-name-label';
+      label.textContent = marble.name;
+      
+      card.appendChild(circle);
+      card.appendChild(label);
+      
+      card.addEventListener('click', () => {
+        this.selectedRacer = marble;
+        document.getElementById('screen-racer-picker').classList.add('hidden');
+        this.changeScreen('arena');
+        this.showToast(`Selected Ball: ${marble.name}`);
+      });
+      
+      gridEl.appendChild(card);
+    });
+  }
+
+  updateRacerHudDisplay() {
+    const nameEl = document.getElementById('chosen-ball-name');
+    const previewEl = document.getElementById('chosen-ball-preview');
+    
+    if (nameEl && previewEl) {
+      nameEl.textContent = this.selectedRacer.name;
+      previewEl.style.background = this.getCssBackground(this.selectedRacer);
+      if (this.selectedRacer.effect === 'blurred') {
+        previewEl.style.filter = 'blur(1.5px)';
+      } else {
+        previewEl.style.filter = '';
+      }
     }
   }
 
@@ -227,15 +327,24 @@ export class UIManager {
     canvas.addEventListener('touchmove', (e) => this.handleTouchMove(e), { passive: false });
     canvas.addEventListener('touchend', () => this.handleMouseUp());
 
-    // --- Double-Click Lead Track Toggle ---
+    // --- Lead/Racer track toggle ---
+    document.getElementById('chk-track-racer').addEventListener('change', (e) => {
+      this.autoTrackRacer = e.target.checked;
+      this.renderer.isTrackingLead = this.autoTrackRacer;
+    });
+
+    // Double click to toggle free/tracking
     canvas.addEventListener('dblclick', () => {
       if (this.currentScreen === 'arena') {
-        this.renderer.isTrackingLead = !this.renderer.isTrackingLead;
+        this.autoTrackRacer = !this.autoTrackRacer;
+        document.getElementById('chk-track-racer').checked = this.autoTrackRacer;
+        this.renderer.isTrackingLead = this.autoTrackRacer;
+        
         const indicator = document.getElementById('camera-track-indicator');
         if (this.renderer.isTrackingLead) {
-          indicator.textContent = '🎥 Tracking Lead';
+          indicator.textContent = '🎥 Tracking My Ball';
           indicator.style.opacity = '1';
-          this.showToast("Camera tracking enabled");
+          this.showToast("Tracking active");
         } else {
           indicator.textContent = '🎥 Free Camera';
           indicator.style.opacity = '0.6';
@@ -255,7 +364,6 @@ export class UIManager {
     });
     
     document.getElementById('menu-btn-cloud').addEventListener('click', () => {
-      // Trigger modal open
       const localConfig = localStorage.getItem('fb_config');
       if (localConfig) {
         const config = JSON.parse(localConfig);
@@ -287,7 +395,7 @@ export class UIManager {
       this.changeScreen('menu');
     });
 
-    // --- Screen: Editor Navigation & Modals ---
+    // --- Screen: Editor Navigation ---
     document.getElementById('editor-btn-back').addEventListener('click', () => {
       if (confirm("Any unsaved drawing paths will be lost. Return to Main Menu?")) {
         this.changeScreen('menu');
@@ -326,7 +434,6 @@ export class UIManager {
         saveModal.classList.add('hidden');
         document.getElementById('map-name').value = '';
         
-        // Take them back to maps browser to see it
         this.changeScreen('browser');
         this.refreshMapsList();
       } catch (err) {
@@ -375,7 +482,6 @@ export class UIManager {
         playBtn.innerHTML = '<span class="play-icon"></span> Pause';
         playBtn.classList.remove('pulse-border');
         
-        // Reset and spawn if all finished
         if (this.simulator.marbles.length === 0) {
           this.triggerSpawn();
         }
@@ -383,10 +489,8 @@ export class UIManager {
     });
 
     document.getElementById('btn-reset-marbles').addEventListener('click', () => {
-      this.triggerSpawn();
-      if (this.simulator.isPaused) {
-        playBtn.click();
-      }
+      // Pop the chooser screen
+      document.getElementById('screen-racer-picker').classList.remove('hidden');
     });
 
     // Sliders
@@ -446,11 +550,28 @@ export class UIManager {
 
   // Trigger Spawning of Marbles
   triggerSpawn() {
-    const count = parseInt(document.getElementById('marble-count').value);
-    const presetName = document.getElementById('marble-preset').value;
-    const preset = MARBLE_PRESETS[presetName] || MARBLE_PRESETS.classic;
+    const opponentCount = parseInt(document.getElementById('marble-count').value);
     
-    this.simulator.spawnMarbles(count, preset);
+    // Choose random unique opponents from the custom list
+    const filteredList = CUSTOM_MARBLES.filter(m => m.name !== this.selectedRacer.name);
+    
+    // Shuffle and slice opponents
+    const shuffled = [...filteredList].sort(() => 0.5 - Math.random());
+    const selectedOpponents = shuffled.slice(0, opponentCount);
+    
+    // Put user racer at index 0 (with isPlayer tag)
+    const racerConfigs = [
+      { ...this.selectedRacer, isPlayer: true }
+    ].concat(selectedOpponents.map(o => ({ ...o, isPlayer: false })));
+    
+    this.simulator.spawnMarbles(racerConfigs.length, racerConfigs);
+    
+    // Link player body ID back to renderer for arrow highlighting and camera track
+    const playerBody = this.simulator.marbles.find(m => m.isPlayer);
+    if (playerBody) {
+      this.renderer.playerRacerId = playerBody.id;
+    }
+    
     this.updateLeaderboard(true);
   }
 
@@ -464,20 +585,20 @@ export class UIManager {
   }
 
   handleMouseDown(e) {
-    // Blocking clicks on Main Menu and Browser
-    if (this.currentScreen === 'menu' || this.currentScreen === 'browser') return;
+    if (this.currentScreen === 'menu' || this.currentScreen === 'browser' || !document.getElementById('screen-racer-picker').classList.contains('hidden')) return;
     
     const mousePos = this.getMousePosition(e);
     
-    // Right click OR Pan Tool activates manual scroll
     if (e.button === 2 || this.currentTool === 'pan' || this.currentScreen === 'arena') {
       this.isPanning = true;
       this.lastPanMouseX = e.clientX;
       this.lastPanMouseY = e.clientY;
-      this.renderer.isTrackingLead = false; // Disable camera tracking during manual drag
+      this.renderer.isTrackingLead = false; 
       
-      // Update camera indicator in HUD
       if (this.currentScreen === 'arena') {
+        this.autoTrackRacer = false;
+        document.getElementById('chk-track-racer').checked = false;
+        
         const ind = document.getElementById('camera-track-indicator');
         ind.textContent = '🎥 Free Camera';
         ind.style.opacity = '0.6';
@@ -485,7 +606,6 @@ export class UIManager {
       return;
     }
 
-    // Left click on Build Editor Mode
     if (e.button === 0 && this.currentScreen === 'editor') {
       const worldPos = this.renderer.screenToWorld(mousePos.x, mousePos.y);
       
@@ -687,13 +807,14 @@ export class UIManager {
     finished.forEach((record, index) => {
       const medalClass = index === 0 ? 'gold' : index === 1 ? 'silver' : index === 2 ? 'bronze' : '';
       const displayTime = record.time.toFixed(2) + 's';
+      const isMyBall = record.name === this.selectedRacer.name;
       
       html += `
-        <div class="leaderboard-row finished">
+        <div class="leaderboard-row finished ${isMyBall ? 'my-racer' : ''}">
           <span class="rank-col rank-number ${medalClass}">${index + 1}</span>
           <span class="name-col">
             <span class="marble-badge" style="background-color: ${record.color}"></span>
-            ${record.emoji} ${record.name}
+            ${record.name} ${isMyBall ? '(You)' : ''}
           </span>
           <span class="status-col">${displayTime}</span>
         </div>
@@ -703,13 +824,14 @@ export class UIManager {
     unfinished.forEach((m, index) => {
       const rank = finished.length + index + 1;
       const medalClass = rank === 1 ? 'gold' : rank === 2 ? 'silver' : rank === 3 ? 'bronze' : '';
+      const isMyBall = m.marbleName === this.selectedRacer.name;
       
       html += `
-        <div class="leaderboard-row">
+        <div class="leaderboard-row ${isMyBall ? 'my-racer' : ''}">
           <span class="rank-col rank-number ${medalClass}">${rank}</span>
           <span class="name-col">
             <span class="marble-badge" style="background-color: ${m.marbleColor}"></span>
-            ${m.marbleEmoji} ${m.marbleName}
+            ${m.marbleName} ${isMyBall ? '(You)' : ''}
           </span>
           <span class="status-col">Racing...</span>
         </div>
@@ -795,14 +917,13 @@ export class UIManager {
         const id = btn.dataset.id;
         const targetMap = this.loadedMaps.find(m => m.id === id);
         if (targetMap) {
-          // Clear background intervals
           if (this.bgCheckInterval) clearInterval(this.bgCheckInterval);
           
           this.simulator.loadMap(targetMap);
           document.getElementById('arena-track-title').textContent = targetMap.name;
           
-          // Switch to Race Simulator HUD
-          this.changeScreen('arena');
+          // Pop the Racer selector modal overlay
+          document.getElementById('screen-racer-picker').classList.remove('hidden');
           
           this.showToast(`Track Loaded: "${targetMap.name}"`);
         }

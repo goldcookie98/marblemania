@@ -10,11 +10,11 @@ export class CanvasRenderer {
     
     // Camera settings
     this.isTrackingLead = false;
+    this.playerRacerId = null; // Stored body ID of the user's selected racer
     
     // Particle pool
     this.particles = [];
     
-    // Resize bindings
     this.resize();
     window.addEventListener('resize', () => this.resize());
   }
@@ -24,7 +24,6 @@ export class CanvasRenderer {
     this.canvas.height = this.canvas.clientHeight;
   }
 
-  // Convert screen coordinates to world coordinates (taking pan/zoom into account)
   screenToWorld(screenX, screenY) {
     return {
       x: (screenX - this.canvas.width / 2 - this.panX) / this.zoom + this.canvas.width / 2,
@@ -32,7 +31,6 @@ export class CanvasRenderer {
     };
   }
 
-  // Convert world coordinates to screen coordinates
   worldToScreen(worldX, worldY) {
     return {
       x: (worldX - this.canvas.width / 2) * this.zoom + this.canvas.width / 2 + this.panX,
@@ -40,7 +38,6 @@ export class CanvasRenderer {
     };
   }
 
-  // Add celebratory particles when goal reached
   spawnGoalExplosion(pos, color) {
     const count = 35;
     for (let i = 0; i < count; i++) {
@@ -50,7 +47,7 @@ export class CanvasRenderer {
         x: pos.x,
         y: pos.y,
         vx: Math.cos(angle) * speed,
-        vy: Math.sin(angle) * speed - 1, // Slight upward bias
+        vy: Math.sin(angle) * speed - 1,
         color: color,
         radius: 2 + Math.random() * 4,
         alpha: 1,
@@ -62,7 +59,6 @@ export class CanvasRenderer {
     }
   }
 
-  // Add spark particles when hazard reset triggered
   spawnHazardExplosion(pos) {
     const count = 20;
     for (let i = 0; i < count; i++) {
@@ -100,52 +96,58 @@ export class CanvasRenderer {
     }
   }
 
-  // Focus camera tracking on the lead marble
   trackLeadMarble(marbles) {
     if (!this.isTrackingLead || marbles.length === 0) return;
     
-    // Find lead marble: dynamic Y coord (highest value means lowest on screen, meaning further down the race)
-    const activeMarbles = marbles.filter(m => !m.finished);
-    if (activeMarbles.length === 0) return;
+    let targetMarble = null;
     
-    let lead = activeMarbles[0];
-    activeMarbles.forEach((m) => {
-      if (m.position.y > lead.position.y) {
-        lead = m;
-      }
-    });
+    // 1. If tracking player marble, find it
+    if (this.playerRacerId) {
+      targetMarble = marbles.find(m => m.id === this.playerRacerId);
+    }
+    
+    // 2. Fall back to standard lead marble if player is not found/finished
+    if (!targetMarble) {
+      const activeMarbles = marbles.filter(m => !m.finished);
+      if (activeMarbles.length === 0) return;
+      
+      targetMarble = activeMarbles[0];
+      activeMarbles.forEach((m) => {
+        if (m.position.y > targetMarble.position.y) {
+          targetMarble = m;
+        }
+      });
+    }
 
-    // Smoothly pan camera to center lead marble
-    const targetPanX = -(lead.position.x - this.canvas.width / 2) * this.zoom;
-    const targetPanY = -(lead.position.y - this.canvas.height / 2 - 100) * this.zoom; // Offset slightly down
+    if (targetMarble) {
+      const targetPanX = -(targetMarble.position.x - this.canvas.width / 2) * this.zoom;
+      const targetPanY = -(targetMarble.position.y - this.canvas.height / 2 - 50) * this.zoom;
 
-    this.panX += (targetPanX - this.panX) * 0.08;
-    this.panY += (targetPanY - this.panY) * 0.08;
+      this.panX += (targetPanX - this.panX) * 0.08;
+      this.panY += (targetPanY - this.panY) * 0.08;
+    }
   }
 
-  // Central Draw method called every frame
   draw(simulator, activeDrawing) {
     const { ctx, canvas } = this;
     
-    // Clear canvas
-    ctx.fillStyle = '#090d16';
+    // Solid periwinkle background (exact Algodoo aesthetic)
+    ctx.fillStyle = '#7b92ff';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     
-    // Update camera tracking
     if (simulator.marbles.length > 0) {
       this.trackLeadMarble(simulator.marbles);
     }
     
-    // Save state and apply translations
     ctx.save();
     ctx.translate(canvas.width / 2 + this.panX, canvas.height / 2 + this.panY);
     ctx.scale(this.zoom, this.zoom);
     ctx.translate(-canvas.width / 2, -canvas.height / 2);
     
-    // 1. Draw Grid
+    // 1. Subtle Algodoo grid coordinate lines
     this.drawGrid();
     
-    // 2. Draw static elements (walls, goals, hazards, spawner)
+    // 2. Draw walls, goals, and hazards
     this.drawStaticElements(simulator.staticElements);
     
     // 3. Draw active drawing path
@@ -153,21 +155,19 @@ export class CanvasRenderer {
       this.drawActivePath(activeDrawing);
     }
     
-    // 4. Draw marbles and trails
+    // 4. Draw marbles, trails, and custom selected arrow
     this.drawMarbles(simulator.marbles);
     
-    // 5. Draw particles
+    // 5. Draw explosions
     this.drawParticles();
     
-    // Restore state
     ctx.restore();
   }
 
   drawGrid() {
     const { ctx, canvas } = this;
-    const gridSpacing = 40;
+    const gridSpacing = 50;
     
-    // Find boundaries of canvas under transform
     const worldTopLeft = this.screenToWorld(0, 0);
     const worldBottomRight = this.screenToWorld(canvas.width, canvas.height);
     
@@ -176,10 +176,9 @@ export class CanvasRenderer {
     const startY = Math.floor(worldTopLeft.y / gridSpacing) * gridSpacing;
     const endY = Math.ceil(worldBottomRight.y / gridSpacing) * gridSpacing;
     
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.03)';
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
     ctx.lineWidth = 1;
     
-    // Draw vertical lines
     for (let x = startX; x <= endX; x += gridSpacing) {
       ctx.beginPath();
       ctx.moveTo(x, startY);
@@ -187,17 +186,12 @@ export class CanvasRenderer {
       ctx.stroke();
     }
     
-    // Draw horizontal lines
     for (let y = startY; y <= endY; y += gridSpacing) {
       ctx.beginPath();
       ctx.moveTo(startX, y);
       ctx.lineTo(endX, y);
       ctx.stroke();
     }
-    
-    // Draw outer boundary warning lines (soft)
-    ctx.strokeStyle = 'rgba(0, 242, 254, 0.07)';
-    ctx.strokeRect(0, 0, 1200, 2000);
   }
 
   drawStaticElements(elements) {
@@ -224,44 +218,26 @@ export class CanvasRenderer {
       ctx.lineWidth = thickness;
       
       if (el.type === 'wall') {
-        // Drop shadow styling for 3D appearance
-        ctx.shadowColor = 'rgba(0, 0, 0, 0.4)';
-        ctx.shadowBlur = 6;
-        ctx.shadowOffsetY = 4;
-        ctx.strokeStyle = '#181b24';
-        ctx.stroke();
-        
-        ctx.shadowColor = 'transparent';
-        ctx.strokeStyle = '#05070a';
-        ctx.lineWidth = thickness - 4;
+        // Flat solid black lines matching Algodoo screenshots
+        ctx.strokeStyle = '#000000';
         ctx.stroke();
       } else if (el.type === 'goal') {
-        // Glowing Neon Green Zone
-        ctx.shadowColor = '#39ff14';
-        ctx.shadowBlur = 12;
-        ctx.strokeStyle = 'rgba(57, 255, 20, 0.8)';
+        // Flat bright green finish zone with center dashes
+        ctx.strokeStyle = '#39ff14';
         ctx.stroke();
         
-        // Dynamic dashed center core
-        ctx.shadowColor = 'transparent';
         ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = 2;
-        ctx.setLineDash([8, 12]);
-        ctx.lineDashOffset = (Date.now() / 150) % 20;
+        ctx.lineWidth = 2.5;
+        ctx.setLineDash([6, 8]);
         ctx.stroke();
       } else if (el.type === 'hazard') {
-        // Pulsing Neon Red Hazard Zone
-        const pulse = 6 + Math.sin(Date.now() / 120) * 4;
-        ctx.shadowColor = '#ff3366';
-        ctx.shadowBlur = pulse;
-        ctx.strokeStyle = 'rgba(255, 51, 102, 0.7)';
+        // Flat bright red reset line with center dashes
+        ctx.strokeStyle = '#ff3366';
         ctx.stroke();
         
-        // Hazard hatch stripes
-        ctx.shadowColor = 'transparent';
-        ctx.strokeStyle = 'rgba(0, 0, 0, 0.25)';
-        ctx.lineWidth = thickness - 4;
-        ctx.setLineDash([4, 10]);
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([4, 6]);
         ctx.stroke();
       }
       ctx.restore();
@@ -270,43 +246,33 @@ export class CanvasRenderer {
 
   drawSpawner(spawner) {
     const { ctx } = this;
-    const pulse = 1 + Math.sin(Date.now() / 200) * 0.08;
     const r = spawner.radius || 15;
     
     ctx.save();
     ctx.translate(spawner.x, spawner.y);
-    ctx.scale(pulse, pulse);
     
-    // Outer glow ring
-    ctx.shadowColor = '#ffe600';
-    ctx.shadowBlur = 10;
-    ctx.strokeStyle = 'rgba(255, 230, 0, 0.8)';
+    ctx.strokeStyle = '#ffe600';
     ctx.lineWidth = 3;
-    ctx.setLineDash([6, 6]);
-    ctx.lineDashOffset = (Date.now() / 300) % 12;
     ctx.beginPath();
     ctx.arc(0, 0, r + 4, 0, Math.PI * 2);
     ctx.stroke();
     
-    // Inner core
-    ctx.shadowColor = 'transparent';
-    ctx.fillStyle = 'rgba(255, 230, 0, 0.15)';
+    ctx.fillStyle = 'rgba(255, 230, 0, 0.25)';
     ctx.beginPath();
     ctx.arc(0, 0, r, 0, Math.PI * 2);
     ctx.fill();
     
     ctx.strokeStyle = '#ffe600';
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 1.5;
     ctx.beginPath();
     ctx.arc(0, 0, r, 0, Math.PI * 2);
     ctx.stroke();
     
-    // Draw an 'S' symbol
-    ctx.fillStyle = '#ffe600';
-    ctx.font = 'bold 11px Outfit';
+    ctx.fillStyle = '#000000';
+    ctx.font = 'bold 8px sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText('SPAWN', 0, 0);
+    ctx.fillText('SPAWN', 0, 0.5);
     
     ctx.restore();
   }
@@ -328,13 +294,13 @@ export class CanvasRenderer {
     ctx.lineWidth = thickness;
     
     if (tool === 'wall') {
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+      ctx.strokeStyle = 'rgba(0, 0, 0, 0.5)';
     } else if (tool === 'goal') {
-      ctx.strokeStyle = 'rgba(57, 255, 20, 0.4)';
+      ctx.strokeStyle = 'rgba(57, 255, 20, 0.5)';
     } else if (tool === 'hazard') {
-      ctx.strokeStyle = 'rgba(255, 51, 102, 0.4)';
+      ctx.strokeStyle = 'rgba(255, 51, 102, 0.5)';
     } else if (tool === 'eraser') {
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
     }
     
     ctx.stroke();
@@ -345,7 +311,7 @@ export class CanvasRenderer {
     const { ctx } = this;
     
     marbles.forEach((m) => {
-      // 1. Draw Motion Trail
+      // 1. Thin colorful vector trail matching Algodoo screenshots
       if (m.trail && m.trail.length > 1) {
         ctx.save();
         ctx.beginPath();
@@ -355,99 +321,159 @@ export class CanvasRenderer {
         }
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
-        ctx.lineWidth = m.circleRadius * 1.2;
-        
-        // Gradient fading trail
-        const gradient = ctx.createLinearGradient(
-          m.trail[0].x, m.trail[0].y, 
-          m.position.x, m.position.y
-        );
-        gradient.addColorStop(0, 'rgba(0, 0, 0, 0)');
-        gradient.addColorStop(1, `${m.marbleColor}33`); // add hex alpha
-        
-        ctx.strokeStyle = gradient;
+        ctx.lineWidth = 3.5;
+        ctx.strokeStyle = m.marbleColor || '#fff';
+        ctx.globalAlpha = 0.6;
         ctx.stroke();
         ctx.restore();
       }
       
-      // 2. Draw Sphere Body
+      // 2. Draw Sphere Body based on chosen texture/effect
       ctx.save();
       ctx.translate(m.position.x, m.position.y);
       ctx.rotate(m.angle);
       
-      // Radial glow gradient for premium sphere shading
-      const glowGrad = ctx.createRadialGradient(
-        -m.circleRadius / 3, -m.circleRadius / 3, 1,
-        0, 0, m.circleRadius
-      );
+      const effect = m.marbleEffect || 'solid';
       
-      if (m.finished) {
-        // Ghost/transparent glow after crossing goal line
-        glowGrad.addColorStop(0, '#ffffff');
-        glowGrad.addColorStop(0.3, 'rgba(255, 255, 255, 0.4)');
-        glowGrad.addColorStop(1, 'rgba(255, 255, 255, 0.05)');
-      } else {
-        glowGrad.addColorStop(0, '#ffffff');
-        glowGrad.addColorStop(0.2, m.marbleColor);
-        glowGrad.addColorStop(0.8, darkenColor(m.marbleColor, 40));
-        glowGrad.addColorStop(1, '#000000');
+      if (effect === 'solid') {
+        ctx.fillStyle = m.marbleColor;
+        ctx.beginPath();
+        ctx.arc(0, 0, m.circleRadius, 0, Math.PI * 2);
+        ctx.fill();
+      } else if (effect === 'translucent') {
+        ctx.fillStyle = m.marbleColor;
+        ctx.beginPath();
+        ctx.arc(0, 0, m.circleRadius, 0, Math.PI * 2);
+        ctx.fill();
+      } else if (effect === 'rainbow') {
+        const grad = ctx.createLinearGradient(-m.circleRadius, -m.circleRadius, m.circleRadius, m.circleRadius);
+        grad.addColorStop(0, 'red');
+        grad.addColorStop(0.2, 'orange');
+        grad.addColorStop(0.4, 'yellow');
+        grad.addColorStop(0.6, 'green');
+        grad.addColorStop(0.8, 'blue');
+        grad.addColorStop(1, 'violet');
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(0, 0, m.circleRadius, 0, Math.PI * 2);
+        ctx.fill();
+      } else if (effect === 't_rainbow') {
+        const grad = ctx.createLinearGradient(-m.circleRadius, -m.circleRadius, m.circleRadius, m.circleRadius);
+        grad.addColorStop(0, 'rgba(255,0,0,0.5)');
+        grad.addColorStop(0.2, 'rgba(255,165,0,0.5)');
+        grad.addColorStop(0.4, 'rgba(255,255,0,0.5)');
+        grad.addColorStop(0.6, 'rgba(0,255,0,0.5)');
+        grad.addColorStop(0.8, 'rgba(0,0,255,0.5)');
+        grad.addColorStop(1, 'rgba(128,0,128,0.5)');
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(0, 0, m.circleRadius, 0, Math.PI * 2);
+        ctx.fill();
+      } else if (effect === 'dull_rainbow') {
+        const grad = ctx.createLinearGradient(-m.circleRadius, -m.circleRadius, m.circleRadius, m.circleRadius);
+        grad.addColorStop(0, '#e8a7a1');
+        grad.addColorStop(0.2, '#e2c29d');
+        grad.addColorStop(0.4, '#e5e5a2');
+        grad.addColorStop(0.6, '#a1dca2');
+        grad.addColorStop(0.8, '#9ecce2');
+        grad.addColorStop(1, '#ccaee5');
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(0, 0, m.circleRadius, 0, Math.PI * 2);
+        ctx.fill();
+      } else if (effect === 'rgb') {
+        // Render 3 color slices inside wheel
+        ctx.fillStyle = '#ff0000';
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.arc(0, 0, m.circleRadius, 0, (Math.PI * 2) / 3);
+        ctx.fill();
+        
+        ctx.fillStyle = '#00ff00';
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.arc(0, 0, m.circleRadius, (Math.PI * 2) / 3, (Math.PI * 4) / 3);
+        ctx.fill();
+        
+        ctx.fillStyle = '#0000ff';
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.arc(0, 0, m.circleRadius, (Math.PI * 4) / 3, Math.PI * 2);
+        ctx.fill();
+      } else if (effect === 'blurred') {
+        ctx.shadowColor = m.marbleColor;
+        ctx.shadowBlur = 10;
+        ctx.fillStyle = m.marbleColor;
+        ctx.beginPath();
+        ctx.arc(0, 0, m.circleRadius, 0, Math.PI * 2);
+        ctx.fill();
       }
-      
-      ctx.shadowColor = m.finished ? '#ffffff' : m.marbleColor;
-      ctx.shadowBlur = m.finished ? 4 : 8;
-      
-      ctx.fillStyle = glowGrad;
-      ctx.beginPath();
-      ctx.arc(0, 0, m.circleRadius, 0, Math.PI * 2);
-      ctx.fill();
-      
-      // Fine border ring
+
+      // Draw crisp black outer border ring on the marble
+      ctx.shadowColor = 'transparent';
       ctx.shadowBlur = 0;
-      ctx.strokeStyle = m.finished ? 'rgba(255,255,255,0.4)' : 'rgba(255, 255, 255, 0.25)';
-      ctx.lineWidth = 1;
+      ctx.strokeStyle = '#000000';
+      ctx.lineWidth = 1.8;
       ctx.beginPath();
       ctx.arc(0, 0, m.circleRadius, 0, Math.PI * 2);
       ctx.stroke();
       
-      // Draw internal flag/emoji details (un-rotated text overlay so text remains upright)
+      // Draw internal rotational indicator dot (so we see the physics rotation)
+      ctx.fillStyle = '#000000';
+      ctx.beginPath();
+      ctx.arc(m.circleRadius / 2, 0, 1.8, 0, Math.PI * 2);
+      ctx.fill();
+      
       ctx.restore();
       
-      ctx.save();
-      ctx.translate(m.position.x, m.position.y);
-      
-      if (m.marbleEmoji) {
-        // Draw emoji overlay
-        ctx.font = `${m.circleRadius * 1.3}px sans-serif`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(m.marbleEmoji, 0, 0.5); // Tiny vertical adjustment
-      } else {
-        // Standard neon center dot
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+      // 3. Draw red floating bouncing indicator arrow above player's racer
+      if (m.id === this.playerRacerId || m.isPlayer) {
+        ctx.save();
+        ctx.translate(m.position.x, m.position.y);
+        
+        const bounce = Math.sin(Date.now() / 150) * 5;
+        const arrowY = -m.circleRadius - 20 + bounce;
+        
+        ctx.fillStyle = '#ff0000';
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1.5;
+        
         ctx.beginPath();
-        ctx.arc(-m.circleRadius / 4, -m.circleRadius / 4, 2, 0, Math.PI * 2);
+        ctx.moveTo(0, arrowY); // Tip
+        ctx.lineTo(-8, arrowY - 10);
+        ctx.lineTo(-3, arrowY - 10);
+        ctx.lineTo(-3, arrowY - 18);
+        ctx.lineTo(3, arrowY - 18);
+        ctx.lineTo(3, arrowY - 10);
+        ctx.lineTo(8, arrowY - 10);
+        ctx.closePath();
+        
         ctx.fill();
+        ctx.stroke();
+        ctx.restore();
       }
-      
-      // Display small name pill above lead/racing marbles if camera is zoomed enough
+
+      // 4. Labeling
       if (this.zoom > 0.6 && !m.finished) {
-        ctx.font = 'bold 8px Outfit';
+        ctx.save();
+        ctx.translate(m.position.x, m.position.y);
+        ctx.font = 'bold 8.5px sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'bottom';
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
         
-        // Text background pill
         const nameText = m.marbleName;
         const textWidth = ctx.measureText(nameText).width;
-        ctx.fillStyle = 'rgba(11, 15, 25, 0.75)';
+        
+        // Draw flat black labeling card
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
         ctx.beginPath();
-        ctx.roundRect(-textWidth / 2 - 4, -m.circleRadius - 14, textWidth + 8, 10, 4);
+        ctx.roundRect(-textWidth / 2 - 4, -m.circleRadius - 14, textWidth + 8, 10, 3);
         ctx.fill();
         
-        ctx.fillStyle = '#fff';
+        ctx.fillStyle = '#ffffff';
         ctx.fillText(nameText, 0, -m.circleRadius - 5);
+        ctx.restore();
       }
-      ctx.restore();
     });
   }
 
@@ -469,7 +495,6 @@ export class CanvasRenderer {
       } else if (p.type === 'hazard_spark') {
         ctx.strokeStyle = p.color;
         ctx.lineWidth = 1.5;
-        // Drawing tiny cross sparks
         ctx.beginPath();
         ctx.moveTo(p.x - p.radius, p.y);
         ctx.lineTo(p.x + p.radius, p.y);
@@ -480,22 +505,4 @@ export class CanvasRenderer {
       ctx.restore();
     });
   }
-}
-
-// Utility to darken a hex color (for spherical shades)
-function darkenColor(hex, percent) {
-  // Simple check
-  if (!hex || hex.charAt(0) !== '#') return hex;
-  
-  let num = parseInt(hex.slice(1), 16),
-      amt = Math.round(2.55 * percent),
-      R = (num >> 16) - amt,
-      G = (num >> 8 & 0x00FF) - amt,
-      B = (num & 0x0000FF) - amt;
-      
-  return '#' + (0x1000000 + 
-    (R < 0 ? 0 : R > 255 ? 255 : R) * 0x10000 + 
-    (G < 0 ? 0 : G > 255 ? 255 : G) * 0x100 + 
-    (B < 0 ? 0 : B > 255 ? 255 : B)
-  ).toString(16).slice(1);
 }

@@ -16,6 +16,7 @@
   
   --shadow-main: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
   --font-sans: 'Outfit', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: 'Courier New', Courier, monospace;
 }
 
 * {
@@ -41,7 +42,7 @@ body, html {
   display: flex;
 }
 
-/* Background Canvas */
+/* Background Canvas (Algodoo style backdrop) */
 #gameCanvas {
   position: absolute;
   top: 0;
@@ -49,7 +50,7 @@ body, html {
   width: 100%;
   height: 100%;
   z-index: 1;
-  background-color: #0d1117;
+  background-color: #7b92ff; /* Flat periwinkle blue */
 }
 
 /* Visibility Control helper */
@@ -85,14 +86,13 @@ body, html {
   margin-right: 4px;
 }
 
-/* Description Text styling */
 .description-text {
   font-size: 12px;
   color: var(--text-muted);
   line-height: 1.6;
 }
 
-/* 1. SCREEN: OVERLAY (Main Menu & Browser) */
+/* SCREEN: OVERLAY */
 .screen-overlay {
   position: absolute;
   top: 0;
@@ -103,7 +103,7 @@ body, html {
   display: flex;
   justify-content: center;
   align-items: center;
-  background: rgba(11, 15, 25, 0.4); /* Slight overlay showing background race */
+  background: rgba(11, 15, 25, 0.4);
 }
 
 /* Main Menu Container */
@@ -218,7 +218,7 @@ body, html {
   color: var(--text-muted);
 }
 
-/* 2. SCREEN: PLAY BROWSER LIST */
+/* SCREEN: PLAY BROWSER LIST */
 .browser-container {
   width: 90%;
   max-width: 800px;
@@ -346,7 +346,7 @@ body, html {
   border-radius: 6px;
 }
 
-/* 3 & 4. HUD LAYOUTS (Active Play/Build Screens) */
+/* HUD LAYOUTS */
 .hud-screen-layout {
   position: absolute;
   top: 0;
@@ -354,15 +354,15 @@ body, html {
   width: 100%;
   height: 100%;
   z-index: 10;
-  pointer-events: none; /* Let clicks pass to canvas underneath */
+  pointer-events: none;
   display: flex;
 }
 
 .hud-screen-layout * {
-  pointer-events: auto; /* Re-enable for HUD controls */
+  pointer-events: auto;
 }
 
-/* Top HUD header bar */
+/* HUD Header Bar */
 .hud-header {
   position: absolute;
   top: 20px;
@@ -423,7 +423,7 @@ body, html {
   font-size: 12px;
 }
 
-/* Sidebars - General Floating Design */
+/* Sidebars - Algodoo Flat styles */
 .sidebar {
   position: absolute;
   top: 104px;
@@ -460,7 +460,6 @@ body, html {
   box-shadow: 0 8px 32px 0 rgba(0, 242, 254, 0.1);
 }
 
-/* Typography section headers */
 h2.section-title {
   font-size: 13px;
   font-weight: 600;
@@ -487,6 +486,64 @@ h2.section-title {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+}
+
+/* Racer Status HUD Area */
+.racer-status-box {
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  margin-bottom: 16px;
+}
+
+.racer-status-box .box-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  letter-spacing: 0.5px;
+}
+
+.chosen-racer-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 10px 0;
+}
+
+.ball-preview {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(255, 255, 255, 0.8);
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.3);
+}
+
+.ball-name {
+  font-weight: 800;
+  font-size: 16px;
+  color: #fff;
+  letter-spacing: 0.5px;
+}
+
+.checkbox-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  padding-top: 8px;
+}
+
+.checkbox-row label {
+  cursor: pointer;
+}
+
+.checkbox-row input[type="checkbox"] {
+  cursor: pointer;
+  width: 16px;
+  height: 16px;
+  accent-color: var(--neon-blue);
 }
 
 /* Tool Buttons Layout */
@@ -743,26 +800,29 @@ input[type="range"]::-webkit-slider-thumb:hover {
   gap: 8px;
 }
 
-/* Webkit Scrollbar styling */
 .scrollable-list::-webkit-scrollbar, 
 .browser-grid-list::-webkit-scrollbar,
-.modal-content::-webkit-scrollbar {
+.modal-content::-webkit-scrollbar,
+.picker-grid-list::-webkit-scrollbar {
   width: 5px;
 }
 .scrollable-list::-webkit-scrollbar-track,
 .browser-grid-list::-webkit-scrollbar-track,
-.modal-content::-webkit-scrollbar-track {
+.modal-content::-webkit-scrollbar-track,
+.picker-grid-list::-webkit-scrollbar-track {
   background: transparent;
 }
 .scrollable-list::-webkit-scrollbar-thumb,
 .browser-grid-list::-webkit-scrollbar-thumb,
-.modal-content::-webkit-scrollbar-thumb {
+.modal-content::-webkit-scrollbar-thumb,
+.picker-grid-list::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.1);
   border-radius: 4px;
 }
 .scrollable-list::-webkit-scrollbar-thumb:hover,
 .browser-grid-list::-webkit-scrollbar-thumb:hover,
-.modal-content::-webkit-scrollbar-thumb:hover {
+.modal-content::-webkit-scrollbar-thumb:hover,
+.picker-grid-list::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.25);
 }
 
@@ -791,7 +851,7 @@ input[type="range"]::-webkit-slider-thumb:hover {
   border: 1px solid rgba(255, 255, 255, 0.03);
   border-radius: 8px;
   font-size: 13px;
-  transition: background 0.2s ease;
+  transition: all 0.2s ease;
 }
 
 .leaderboard-row:hover {
@@ -806,6 +866,18 @@ input[type="range"]::-webkit-slider-thumb:hover {
 .leaderboard-row.finished .status-col {
   color: var(--neon-green);
   font-weight: 700;
+}
+
+/* Highlight user's racer in standings list */
+.leaderboard-row.my-racer {
+  border: 1.5px solid var(--neon-yellow) !important;
+  background: rgba(255, 230, 0, 0.08) !important;
+  box-shadow: 0 0 10px rgba(255, 230, 0, 0.2) !important;
+}
+
+.leaderboard-row.my-racer .name-col {
+  color: var(--neon-yellow) !important;
+  font-weight: 800;
 }
 
 .rank-number {
@@ -823,6 +895,7 @@ input[type="range"]::-webkit-slider-thumb:hover {
   border-radius: 50%;
   display: inline-block;
   margin-right: 8px;
+  border: 0.5px solid rgba(255, 255, 255, 0.3);
 }
 
 .no-data-msg {
@@ -999,4 +1072,113 @@ input[type="text"]:focus {
 
 .modal-actions button {
   flex: 1;
+}
+
+/* 78 RACER PICKER PANEL OVERLAY */
+.picker-container {
+  width: 95%;
+  max-width: 920px;
+  height: 90vh;
+  max-height: 720px;
+  display: flex;
+  flex-direction: column;
+  padding: 24px;
+  animation: float-in 0.3s ease-out;
+  border-color: rgba(255, 255, 255, 0.15);
+  overflow: hidden;
+}
+
+.picker-header h2 {
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  margin-bottom: 12px;
+  text-align: center;
+  background: linear-gradient(135deg, #fff 0%, var(--neon-blue) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.picker-note {
+  background: #000;
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  padding: 12px 18px;
+  border-radius: 6px;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  line-height: 1.5;
+  margin-bottom: 18px;
+  text-align: center;
+  box-shadow: inset 0 2px 8px rgba(0,0,0,0.8);
+}
+
+.picker-grid-list {
+  flex-grow: 1;
+  overflow-y: auto;
+  background: #7b92ff; /* Authentic cornflower/blue from reference */
+  border-radius: 8px;
+  border: 2px solid #000;
+  padding: 20px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(88px, 1fr));
+  gap: 16px;
+  box-shadow: inset 0 2px 15px rgba(0, 0, 0, 0.3);
+}
+
+/* Custom individual racer cards inside the picker */
+.racer-card {
+  background: transparent;
+  border: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  padding: 6px 4px;
+  border-radius: 8px;
+  transition: transform 0.15s ease, background-color 0.15s ease;
+}
+
+.racer-card:hover {
+  transform: scale(1.1);
+  background-color: rgba(255, 255, 255, 0.12);
+}
+
+.racer-circle {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  border: 2px solid #000;
+  box-shadow: 0 3px 6px rgba(0,0,0,0.25);
+  position: relative;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+/* Text label underneath the circle */
+.racer-name-label {
+  color: #000; /* Solid black label */
+  font-family: var(--font-sans);
+  font-weight: 800;
+  font-size: 11px;
+  text-align: center;
+  max-width: 82px;
+  word-wrap: break-word;
+  line-height: 1.1;
+  text-shadow: 0.5px 0.5px 0px rgba(255,255,255,0.6);
+}
+
+.picker-footer {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  margin-top: 10px;
+}
+
+.picker-footer .credit {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted);
 }

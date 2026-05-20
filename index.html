@@ -40,12 +40,12 @@
             <span class="btn-icon">✏️</span> Build a Track
           </button>
           <button id="menu-btn-cloud" class="menu-btn-secondary">
-            <span class="btn-icon">⚙️</span> Cloud Sync Sync Setup
+            <span class="btn-icon">⚙️</span> Cloud Sync Setup
           </button>
         </div>
         <div class="menu-footer">
           <span id="menu-firebase-badge" class="badge badge-offline">Offline</span>
-          <span class="copyright">V1.1 - Premium Sandbox</span>
+          <span class="copyright">V1.2 - Algodoo Flat Edition</span>
         </div>
       </div>
     </div>
@@ -77,7 +77,7 @@
           <span id="arena-track-title">Pachinko Cascade</span>
         </div>
         <div class="camera-indicator" id="camera-track-indicator" title="Double click canvas to toggle tracking">
-          🎥 Tracking Lead
+          🎥 Tracking My Ball
         </div>
       </div>
 
@@ -90,15 +90,26 @@
               <span class="play-icon"></span> Play Race
             </button>
             <button id="btn-reset-marbles" class="action-btn secondary-btn">
-              Reset Marbles
+              Reset / Choose Ball
             </button>
+          </div>
+          <div class="racer-status-box">
+            <span class="box-label">Your Chosen Ball:</span>
+            <div class="chosen-racer-info">
+              <div id="chosen-ball-preview" class="ball-preview"></div>
+              <span id="chosen-ball-name" class="ball-name">None Selected</span>
+            </div>
+            <div class="control-row checkbox-row">
+              <label for="chk-track-racer">Auto-track my racer</label>
+              <input type="checkbox" id="chk-track-racer" checked>
+            </div>
           </div>
           <div class="slider-group">
             <div class="slider-header">
-              <span>Marble Count</span>
-              <span id="marble-count-val">10</span>
+              <span>Opponent Count</span>
+              <span id="marble-count-val">15</span>
             </div>
-            <input type="range" id="marble-count" min="1" max="50" value="10">
+            <input type="range" id="marble-count" min="1" max="77" value="15">
           </div>
           <div class="slider-group">
             <div class="slider-header">
@@ -106,17 +117,6 @@
               <span id="physics-speed-val">1x</span>
             </div>
             <input type="range" id="physics-speed" min="0.5" max="3.0" value="1.0" step="0.5">
-          </div>
-          <div class="settings-group">
-            <div class="control-row">
-              <label for="marble-preset">Visual Preset</label>
-              <select id="marble-preset">
-                <option value="classic">Classic Glow</option>
-                <option value="countries">Country Flags</option>
-                <option value="emoji">Emoji Balls</option>
-                <option value="planets">Solar System</option>
-              </select>
-            </div>
           </div>
         </div>
 
@@ -216,6 +216,25 @@
               <button type="submit" class="action-btn primary-btn">Save to Library</button>
             </div>
           </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- 5. SCREEN: RACER SELECTION MODAL (POP AT PLAY START) -->
+    <div id="screen-racer-picker" class="screen-overlay hidden">
+      <div class="picker-container glass-panel">
+        <div class="picker-header">
+          <h2>PICK YOUR RACER</h2>
+          <p class="picker-note">
+            Pick one that you can like the most! You CANNOT pick a marble from the marbles who are already in for Season 3.<br>
+            <strong>Note:</strong> The marbles' users from seasons 1 and 2 cannot pick a new marble. They can only change their username if their names from S1 and 2 were outdated.
+          </p>
+        </div>
+        <div id="racer-grid-list" class="picker-grid-list">
+          <!-- Populated dynamically via JS with the 78 custom marbles -->
+        </div>
+        <div class="picker-footer">
+          <span class="credit">Credit: Syncadoo</span>
         </div>
       </div>
     </div>

@@ -247,6 +247,8 @@ export class PhysicsSimulator {
       marble.marbleName = preset.name;
       marble.marbleColor = preset.color;
       marble.marbleEmoji = preset.emoji;
+      marble.marbleEffect = preset.effect;
+      marble.isPlayer = preset.isPlayer || false;
       marble.finished = false;
       marble.trail = []; // Cache for trailing track positions
       
