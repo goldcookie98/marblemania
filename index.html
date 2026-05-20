@@ -13,173 +13,220 @@
 </head>
 <body>
   <div id="app">
-    <!-- Canvas for Physics rendering -->
+    <!-- Global background physics canvas -->
     <canvas id="gameCanvas"></canvas>
 
-    <!-- Canvas Instruction HUD -->
-    <div class="hud-instructions">
-      <span><kbd>Left Click + Drag</kbd> Draw / Interact</span>
-      <span><kbd>Right Click + Drag</kbd> Pan Map</span>
+    <!-- Canvas HUD Instruction (only visible during active play or edit) -->
+    <div id="canvas-hud-instructions" class="hud-instructions hidden">
+      <span class="edit-hud-only"><kbd>Left Click + Drag</kbd> Draw Elements</span>
+      <span class="pan-hud-only"><kbd>Left Click + Drag</kbd> Pan Viewport</span>
+      <span><kbd>Right Click + Drag</kbd> Pan Viewport</span>
       <span><kbd>Scroll Wheel</kbd> Zoom</span>
     </div>
 
-    <!-- Left Controls Panel -->
-    <div class="sidebar glass-panel left-panel">
-      <div class="panel-header">
-        <h1>MARBLE MANIA</h1>
-        <p class="subtitle">Physics Sandbox & Race Builder</p>
-      </div>
-
-      <div class="panel-section">
-        <h2 class="section-title">Editor Tools</h2>
-        <div class="tool-grid">
-          <button id="tool-wall" class="tool-btn active" data-tool="wall" title="Draw Bouncing Walls">
-            <span class="tool-icon wall-icon"></span>
-            <span class="tool-label">Wall (Black)</span>
+    <!-- 1. SCREEN: MAIN MENU -->
+    <div id="screen-menu" class="screen-overlay">
+      <div class="menu-container glass-panel">
+        <div class="menu-header">
+          <div class="glow-logo">⚪</div>
+          <h1>MARBLE MANIA</h1>
+          <p class="subtitle">Algodoo Physics Sandbox</p>
+        </div>
+        <div class="menu-buttons">
+          <button id="menu-btn-play" class="menu-btn-primary pulse-border">
+            <span class="btn-icon">🏁</span> Play Tracks
           </button>
-          <button id="tool-goal" class="tool-btn" data-tool="goal" title="Draw Finish Zones">
-            <span class="tool-icon goal-icon"></span>
-            <span class="tool-label">Goal (Green)</span>
+          <button id="menu-btn-build" class="menu-btn-secondary">
+            <span class="btn-icon">✏️</span> Build a Track
           </button>
-          <button id="tool-hazard" class="tool-btn" data-tool="hazard" title="Draw Hazard Resets">
-            <span class="tool-icon hazard-icon"></span>
-            <span class="tool-label">Hazard (Red)</span>
-          </button>
-          <button id="tool-spawner" class="tool-btn" data-tool="spawner" title="Place Spawner Point">
-            <span class="tool-icon spawner-icon"></span>
-            <span class="tool-label">Spawner</span>
-          </button>
-          <button id="tool-eraser" class="tool-btn" data-tool="eraser" title="Erase Drawn Elements">
-            <span class="tool-icon eraser-icon"></span>
-            <span class="tool-label">Eraser</span>
-          </button>
-          <button id="tool-pan" class="tool-btn" data-tool="pan" title="Pan and Move viewport">
-            <span class="tool-icon pan-icon"></span>
-            <span class="tool-label">Pan Mode</span>
+          <button id="menu-btn-cloud" class="menu-btn-secondary">
+            <span class="btn-icon">⚙️</span> Cloud Sync Sync Setup
           </button>
         </div>
-
-        <div class="slider-group">
-          <div class="slider-header">
-            <span>Brush Size</span>
-            <span id="brush-size-val">12px</span>
-          </div>
-          <input type="range" id="brush-size" min="4" max="50" value="12" step="2">
-        </div>
-
-        <div class="action-row">
-          <button id="btn-undo" class="action-btn secondary-btn" title="Undo Last Drawing">Undo</button>
-          <button id="btn-clear" class="action-btn danger-btn" title="Clear Canvas">Clear All</button>
+        <div class="menu-footer">
+          <span id="menu-firebase-badge" class="badge badge-offline">Offline</span>
+          <span class="copyright">V1.1 - Premium Sandbox</span>
         </div>
       </div>
+    </div>
 
-      <div class="panel-section">
-        <h2 class="section-title">Race Control</h2>
-        <div class="simulation-controls">
-          <button id="btn-play" class="action-btn primary-btn pulse-border" title="Start Race / Resume Physics">
-            <span class="play-icon"></span> Play Race
-          </button>
-          <button id="btn-reset-marbles" class="action-btn secondary-btn" title="Respawn All Marbles">
-            Reset Marbles
-          </button>
+    <!-- 2. SCREEN: PLAY MAPS BROWSER -->
+    <div id="screen-browser" class="screen-overlay hidden">
+      <div class="browser-container glass-panel">
+        <div class="browser-header">
+          <button id="browser-btn-back" class="icon-back-btn" title="Back to Main Menu">←</button>
+          <h2>SELECT A TRACK</h2>
+          <button id="btn-refresh-maps" class="refresh-btn" title="Refresh List">↻</button>
         </div>
+        <div class="search-bar">
+          <input type="text" id="map-search" placeholder="Search track names or creators...">
+        </div>
+        <div id="shared-maps-list" class="browser-grid-list">
+          <!-- Populated dynamically via JS -->
+        </div>
+      </div>
+    </div>
 
-        <div class="slider-group">
-          <div class="slider-header">
-            <span>Marble Count</span>
-            <span id="marble-count-val">10</span>
+    <!-- 3. HUD SCREEN: RACE ARENA (PLAY MODE ACTIVE) -->
+    <div id="screen-arena" class="hud-screen-layout hidden">
+      <!-- Top header bar -->
+      <div class="hud-header glass-panel">
+        <button id="arena-btn-back" class="action-btn secondary-btn back-btn-layout">← Menu</button>
+        <div class="active-track-name">
+          <span class="label">Playing:</span>
+          <span id="arena-track-title">Pachinko Cascade</span>
+        </div>
+        <div class="camera-indicator" id="camera-track-indicator" title="Double click canvas to toggle tracking">
+          🎥 Tracking Lead
+        </div>
+      </div>
+
+      <!-- Right sidebar for leaderboard and race controls -->
+      <div class="sidebar glass-panel right-panel">
+        <div class="panel-section">
+          <h2 class="section-title">Race Control</h2>
+          <div class="simulation-controls">
+            <button id="btn-play" class="action-btn primary-btn pulse-border">
+              <span class="play-icon"></span> Play Race
+            </button>
+            <button id="btn-reset-marbles" class="action-btn secondary-btn">
+              Reset Marbles
+            </button>
           </div>
-          <input type="range" id="marble-count" min="1" max="50" value="10">
-        </div>
-
-        <div class="slider-group">
-          <div class="slider-header">
-            <span>Simulation Speed</span>
-            <span id="physics-speed-val">1x</span>
+          <div class="slider-group">
+            <div class="slider-header">
+              <span>Marble Count</span>
+              <span id="marble-count-val">10</span>
+            </div>
+            <input type="range" id="marble-count" min="1" max="50" value="10">
           </div>
-          <input type="range" id="physics-speed" min="0.5" max="3.0" value="1.0" step="0.5">
+          <div class="slider-group">
+            <div class="slider-header">
+              <span>Simulation Speed</span>
+              <span id="physics-speed-val">1x</span>
+            </div>
+            <input type="range" id="physics-speed" min="0.5" max="3.0" value="1.0" step="0.5">
+          </div>
+          <div class="settings-group">
+            <div class="control-row">
+              <label for="marble-preset">Visual Preset</label>
+              <select id="marble-preset">
+                <option value="classic">Classic Glow</option>
+                <option value="countries">Country Flags</option>
+                <option value="emoji">Emoji Balls</option>
+                <option value="planets">Solar System</option>
+              </select>
+            </div>
+          </div>
         </div>
 
-        <div class="settings-group">
-          <div class="control-row">
-            <label for="marble-preset">Visual Preset</label>
-            <select id="marble-preset">
-              <option value="classic">Classic Glow</option>
-              <option value="countries">Country Flags</option>
-              <option value="emoji">Emoji Balls</option>
-              <option value="planets">Solar System</option>
-            </select>
+        <div class="panel-section flex-grow">
+          <h2 class="section-title">Standings</h2>
+          <div class="leaderboard-header">
+            <span class="rank-col">#</span>
+            <span class="name-col">Marble</span>
+            <span class="status-col">Time / Status</span>
+          </div>
+          <div id="leaderboard-list" class="scrollable-list">
+            <!-- Populated via JS -->
           </div>
         </div>
       </div>
     </div>
 
-    <!-- Right Panels (Leaderboard + Sharing) -->
-    <div class="sidebar glass-panel right-panel">
-      <div class="tabs">
-        <button class="tab-btn active" data-tab="leaderboard">Leaderboard</button>
-        <button class="tab-btn" data-tab="sharing">Share Maps</button>
-      </div>
-
-      <!-- Tab 1: Leaderboard -->
-      <div class="tab-content active" id="tab-leaderboard">
-        <div class="leaderboard-header">
-          <span class="rank-col">#</span>
-          <span class="name-col">Marble</span>
-          <span class="status-col">Time / Status</span>
+    <!-- 4. HUD SCREEN: SANDBOX EDITOR (BUILD MODE ACTIVE) -->
+    <div id="screen-editor" class="hud-screen-layout hidden">
+      <!-- Top header bar -->
+      <div class="hud-header glass-panel">
+        <button id="editor-btn-back" class="action-btn secondary-btn back-btn-layout">← Menu</button>
+        <div class="active-track-name">
+          <span class="label">Editing:</span>
+          <span id="editor-track-title">New Custom Map</span>
         </div>
-        <div id="leaderboard-list" class="scrollable-list">
-          <div class="no-data-msg">Race not started. Click "Play Race" to spawn marbles!</div>
+        <div class="editor-actions">
+          <button id="btn-undo" class="action-btn secondary-btn header-action-btn">Undo</button>
+          <button id="btn-clear" class="action-btn danger-btn header-action-btn">Clear All</button>
+          <button id="editor-btn-save-trigger" class="action-btn primary-btn header-action-btn">Save Track</button>
         </div>
       </div>
 
-      <!-- Tab 2: Sharing -->
-      <div class="tab-content" id="tab-sharing">
-        <!-- Save Map Section -->
-        <div class="panel-subsection">
-          <h3 class="section-title">Save Current Map</h3>
+      <!-- Left sidebar for drawing tools -->
+      <div class="sidebar glass-panel left-panel">
+        <div class="panel-section">
+          <h2 class="section-title">Drawing Brushes</h2>
+          <div class="tool-grid">
+            <button id="tool-wall" class="tool-btn active" data-tool="wall" title="Draw Bouncing Walls">
+              <span class="tool-icon wall-icon"></span>
+              <span class="tool-label">Wall (Black)</span>
+            </button>
+            <button id="tool-goal" class="tool-btn" data-tool="goal" title="Draw Finish Zones">
+              <span class="tool-icon goal-icon"></span>
+              <span class="tool-label">Goal (Green)</span>
+            </button>
+            <button id="tool-hazard" class="tool-btn" data-tool="hazard" title="Draw Hazard Resets">
+              <span class="tool-icon hazard-icon"></span>
+              <span class="tool-label">Hazard (Red)</span>
+            </button>
+            <button id="tool-spawner" class="tool-btn" data-tool="spawner" title="Place Spawner Point">
+              <span class="tool-icon spawner-icon"></span>
+              <span class="tool-label">Spawner</span>
+            </button>
+            <button id="tool-eraser" class="tool-btn" data-tool="eraser" title="Erase elements inline">
+              <span class="tool-icon eraser-icon"></span>
+              <span class="tool-label">Eraser</span>
+            </button>
+            <button id="tool-pan" class="tool-btn" data-tool="pan" title="Drag to move viewport">
+              <span class="tool-icon pan-icon"></span>
+              <span class="tool-label">Pan Mode</span>
+            </button>
+          </div>
+          <div class="slider-group">
+            <div class="slider-header">
+              <span>Brush Size</span>
+              <span id="brush-size-val">12px</span>
+            </div>
+            <input type="range" id="brush-size" min="4" max="50" value="12" step="2">
+          </div>
+        </div>
+
+        <div class="panel-section">
+          <h2 class="section-title">Simulator Preview</h2>
+          <p class="description-text">
+            Place your yellow spawner, paint bouncing walls (black), green goals, and red hazards. Click "Save Track" above when finished to add it to your tracks library!
+          </p>
+        </div>
+      </div>
+
+      <!-- Save Map Modal Overlay (Inner Editor Scope) -->
+      <div id="save-map-modal" class="modal-overlay hidden">
+        <div class="modal-content glass-panel">
+          <button id="save-modal-close" class="modal-close-btn">&times;</button>
+          <h2>Save Your Track</h2>
           <form id="save-map-form">
             <div class="input-group">
-              <label for="map-name">Map Name</label>
-              <input type="text" id="map-name" placeholder="My Epic Track" required maxlength="30">
+              <label for="map-name">Track Name</label>
+              <input type="text" id="map-name" placeholder="My Epic Slide" required maxlength="30">
             </div>
             <div class="input-group">
               <label for="map-creator">Creator Name</label>
-              <input type="text" id="map-creator" placeholder="Marble Racer" required maxlength="20">
+              <input type="text" id="map-creator" placeholder="Gravity Racer" required maxlength="20">
             </div>
-            <button type="submit" class="action-btn primary-btn">Save to List</button>
+            <div class="modal-actions">
+              <button type="button" id="btn-save-cancel" class="action-btn secondary-btn">Cancel</button>
+              <button type="submit" class="action-btn primary-btn">Save to Library</button>
+            </div>
           </form>
-        </div>
-
-        <!-- Saved / Shared Maps List -->
-        <div class="panel-subsection flex-grow">
-          <div class="section-header-row">
-            <h3 class="section-title">Explore Maps</h3>
-            <button id="btn-refresh-maps" class="refresh-btn" title="Refresh List">↻</button>
-          </div>
-          <div class="search-bar">
-            <input type="text" id="map-search" placeholder="Search maps...">
-          </div>
-          <div id="shared-maps-list" class="scrollable-list">
-            <!-- Dynamically populated -->
-          </div>
-        </div>
-
-        <!-- Firebase Config Toggle -->
-        <div class="firebase-status-bar">
-          <span id="firebase-status-badge" class="badge badge-offline">Offline Storage</span>
-          <button id="btn-open-firebase-config" class="link-btn">Setup Cloud Sync</button>
         </div>
       </div>
     </div>
 
-    <!-- Firebase Connection Settings Modal -->
+    <!-- Firebase Connection Settings Modal (Outer Main Menu Scope) -->
     <div id="firebase-modal" class="modal-overlay hidden">
       <div class="modal-content glass-panel">
         <button id="modal-close" class="modal-close-btn">&times;</button>
-        <h2>Connect Firebase Cloud Sync</h2>
+        <h2>Connect Firebase Database</h2>
         <p class="modal-description">
-          Provide your Firebase Project credentials to sync maps directly to the Cloud database. Maps will be shared instantly with all players globally!
+          Provide your Firebase Firestore credentials to sync maps directly to the Cloud database. Maps will be shared instantly with all players globally!
         </p>
         <form id="firebase-config-form">
           <div class="input-group">
@@ -211,7 +258,7 @@
             <input type="text" id="fb-appId" required placeholder="1:123456:web:abcd...">
           </div>
           <div class="modal-actions">
-            <button type="button" id="btn-fb-clear" class="action-btn danger-btn">Disconnect & Clear</button>
+            <button type="button" id="btn-fb-clear" class="action-btn danger-btn">Disconnect Cloud</button>
             <button type="submit" class="action-btn primary-btn">Connect Cloud DB</button>
           </div>
         </form>

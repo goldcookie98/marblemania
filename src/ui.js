@@ -7,11 +7,9 @@ import {
   likeMap 
 } from './firebase-db';
 
-// Marble Visual Presets Definition
 export const MARBLE_PRESETS = {
   classic: Array.from({ length: 50 }, (_, i) => {
-    // Generate a nice spectrum of neon/bright colors
-    const hue = (i * 137.5) % 360; // Golden ratio scatter
+    const hue = (i * 137.5) % 360;
     return {
       name: `Glow-${i + 1}`,
       color: `hsl(${hue}, 100%, 60%)`,
@@ -93,38 +91,250 @@ export class UIManager {
     this.simulator = simulator;
     this.renderer = renderer;
     
-    // Editor State
-    this.currentTool = 'wall'; // wall, goal, hazard, spawner, eraser, pan
+    // Screens routing state: menu, browser, arena, editor
+    this.currentScreen = 'menu';
+    
+    // Editor State variables
+    this.currentTool = 'wall'; 
     this.brushSize = 12;
     this.activeDrawingPath = null;
     this.isDrawing = false;
-    
-    // UI Panels References
+    this.isPanning = false;
+
     this.canvas = renderer.canvas;
     
-    // Binding functions
     this.initEventListeners();
     this.updateCloudStatus();
     this.refreshMapsList();
+    
+    // Set initial screen state
+    this.changeScreen('menu');
   }
 
-  // Set up mouse and UI elements bindings
+  // Handle routing flow
+  changeScreen(screenName) {
+    this.currentScreen = screenName;
+    
+    // 1. Manage visibility classes
+    const screens = ['menu', 'browser', 'arena', 'editor'];
+    screens.forEach((s) => {
+      const el = document.getElementById(`screen-${s}`);
+      if (s === screenName) {
+        el.classList.remove('hidden');
+      } else {
+        el.classList.add('hidden');
+      }
+    });
+
+    // 2. Manage instruction HUD overlay
+    const hudInst = document.getElementById('canvas-hud-instructions');
+    if (screenName === 'editor') {
+      hudInst.classList.remove('hidden');
+      hudInst.querySelector('.edit-hud-only').classList.remove('hidden');
+      hudInst.querySelector('.pan-hud-only').classList.add('hidden');
+    } else if (screenName === 'arena') {
+      hudInst.classList.remove('hidden');
+      hudInst.querySelector('.edit-hud-only').classList.add('hidden');
+      hudInst.querySelector('.pan-hud-only').classList.remove('hidden');
+    } else {
+      hudInst.classList.add('hidden');
+    }
+
+    // 3. Clear drawing states
+    this.activeDrawingPath = null;
+    this.isDrawing = false;
+    this.isPanning = false;
+    
+    // 4. Configure physics & rendering state depending on target screen
+    if (screenName === 'menu') {
+      this.renderer.isTrackingLead = false;
+      this.renderer.zoom = 1.0;
+      this.renderer.panX = 0;
+      this.renderer.panY = 0;
+      
+      // Load sample-pachinko in background and spawn automated background marbles
+      this.loadBackgroundDemo();
+    } else if (screenName === 'browser') {
+      // Keep menu physics running softly behind list
+      this.renderer.isTrackingLead = false;
+    } else if (screenName === 'editor') {
+      // Sandbox: clear marbles and pause physics so drawing is static
+      this.simulator.isPaused = true;
+      this.simulator.marbles.forEach(m => Matter.World.remove(this.simulator.world, m));
+      this.simulator.marbles = [];
+      this.simulator.finishedMarbles = [];
+      this.renderer.isTrackingLead = false;
+      
+      // Load empty custom layout or preserve current drawings if any
+      if (this.simulator.staticElements.filter(e => e.type !== 'spawner').length === 0) {
+        this.simulator.clearAll();
+      }
+    } else if (screenName === 'arena') {
+      // Ready to race
+      this.simulator.isPaused = true;
+      this.renderer.isTrackingLead = true; // Auto camera on
+      
+      // Reset play button state
+      const playBtn = document.getElementById('btn-play');
+      playBtn.innerHTML = '<span class="play-icon"></span> Play Race';
+      playBtn.classList.add('pulse-border');
+      
+      this.triggerSpawn();
+    }
+  }
+
+  // Spawns low count marbles to create animated backdrop in main menu
+  async loadBackgroundDemo() {
+    this.simulator.isPaused = false;
+    this.simulator.physicsSpeed = 1.0;
+    
+    // Fetch and load Pachinko track silently
+    const maps = await fetchAllMaps();
+    const pachinko = maps.find(m => m.id === 'sample-pachinko');
+    if (pachinko) {
+      this.simulator.loadMap(pachinko);
+      // Spawn 12 demo marbles
+      this.simulator.spawnMarbles(12, MARBLE_PRESETS.classic);
+      
+      // Periodically loop them automatically in menu screen
+      if (this.bgCheckInterval) clearInterval(this.bgCheckInterval);
+      this.bgCheckInterval = setInterval(() => {
+        if (this.currentScreen !== 'menu' && this.currentScreen !== 'browser') {
+          clearInterval(this.bgCheckInterval);
+          return;
+        }
+        
+        // If all marbles finished or fell past screen, respawn them
+        const activeCount = this.simulator.marbles.filter(m => !m.finished).length;
+        if (activeCount === 0 || this.simulator.finishedMarbles.length >= 10) {
+          this.simulator.spawnMarbles(12, MARBLE_PRESETS.classic);
+        }
+      }, 5000);
+    }
+  }
+
   initEventListeners() {
     const { canvas } = this;
     
-    // --- Canvas Mouse & Scroll Event handlers ---
+    // --- Canvas Controls ---
     canvas.addEventListener('mousedown', (e) => this.handleMouseDown(e));
     canvas.addEventListener('mousemove', (e) => this.handleMouseMove(e));
     window.addEventListener('mouseup', () => this.handleMouseUp());
-    canvas.addEventListener('contextmenu', (e) => e.preventDefault()); // Prevent right click menu
+    canvas.addEventListener('contextmenu', (e) => e.preventDefault());
     canvas.addEventListener('wheel', (e) => this.handleWheel(e), { passive: false });
     
-    // Support Touch Screen drawing
     canvas.addEventListener('touchstart', (e) => this.handleTouchStart(e), { passive: false });
     canvas.addEventListener('touchmove', (e) => this.handleTouchMove(e), { passive: false });
     canvas.addEventListener('touchend', () => this.handleMouseUp());
 
-    // --- Toolbar Buttons ---
+    // --- Double-Click Lead Track Toggle ---
+    canvas.addEventListener('dblclick', () => {
+      if (this.currentScreen === 'arena') {
+        this.renderer.isTrackingLead = !this.renderer.isTrackingLead;
+        const indicator = document.getElementById('camera-track-indicator');
+        if (this.renderer.isTrackingLead) {
+          indicator.textContent = '🎥 Tracking Lead';
+          indicator.style.opacity = '1';
+          this.showToast("Camera tracking enabled");
+        } else {
+          indicator.textContent = '🎥 Free Camera';
+          indicator.style.opacity = '0.6';
+          this.showToast("Free camera mode");
+        }
+      }
+    });
+
+    // --- Screen: Main Menu Navigation ---
+    document.getElementById('menu-btn-play').addEventListener('click', () => {
+      this.changeScreen('browser');
+      this.refreshMapsList();
+    });
+    
+    document.getElementById('menu-btn-build').addEventListener('click', () => {
+      this.changeScreen('editor');
+    });
+    
+    document.getElementById('menu-btn-cloud').addEventListener('click', () => {
+      // Trigger modal open
+      const localConfig = localStorage.getItem('fb_config');
+      if (localConfig) {
+        const config = JSON.parse(localConfig);
+        document.getElementById('fb-apiKey').value = config.apiKey || '';
+        document.getElementById('fb-authDomain').value = config.authDomain || '';
+        document.getElementById('fb-projectId').value = config.projectId || '';
+        document.getElementById('fb-storageBucket').value = config.storageBucket || '';
+        document.getElementById('fb-messagingSenderId').value = config.messagingSenderId || '';
+        document.getElementById('fb-appId').value = config.appId || '';
+      }
+      document.getElementById('firebase-modal').classList.remove('hidden');
+    });
+
+    // --- Screen: Play Browser Navigation ---
+    document.getElementById('browser-btn-back').addEventListener('click', () => {
+      this.changeScreen('menu');
+    });
+    
+    document.getElementById('btn-refresh-maps').addEventListener('click', () => {
+      this.refreshMapsList();
+    });
+
+    document.getElementById('map-search').addEventListener('input', (e) => {
+      this.filterMapsList(e.target.value.toLowerCase());
+    });
+
+    // --- Screen: Race Arena Navigation ---
+    document.getElementById('arena-btn-back').addEventListener('click', () => {
+      this.changeScreen('menu');
+    });
+
+    // --- Screen: Editor Navigation & Modals ---
+    document.getElementById('editor-btn-back').addEventListener('click', () => {
+      if (confirm("Any unsaved drawing paths will be lost. Return to Main Menu?")) {
+        this.changeScreen('menu');
+      }
+    });
+
+    const saveModal = document.getElementById('save-map-modal');
+    document.getElementById('editor-btn-save-trigger').addEventListener('click', () => {
+      const elements = this.simulator.exportMap();
+      if (elements.filter(el => el.type !== 'spawner').length === 0) {
+        alert("Cannot save an empty map. Draw some walls first!");
+        return;
+      }
+      saveModal.classList.remove('hidden');
+    });
+
+    document.getElementById('save-modal-close').addEventListener('click', () => {
+      saveModal.classList.add('hidden');
+    });
+    
+    document.getElementById('btn-save-cancel').addEventListener('click', () => {
+      saveModal.classList.add('hidden');
+    });
+
+    document.getElementById('save-map-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const mapName = document.getElementById('map-name').value.trim();
+      const creatorName = document.getElementById('map-creator').value.trim();
+      const elements = this.simulator.exportMap();
+
+      this.showToast("Saving track...");
+      try {
+        await saveMap(mapName, creatorName, elements);
+        this.showToast("Track saved successfully!");
+        
+        saveModal.classList.add('hidden');
+        document.getElementById('map-name').value = '';
+        
+        // Take them back to maps browser to see it
+        this.changeScreen('browser');
+        this.refreshMapsList();
+      } catch (err) {
+        this.showToast("Failed to save track.");
+      }
+    });
+
+    // --- Editor Drawing Brush selection ---
     const toolButtons = document.querySelectorAll('.tool-btn');
     toolButtons.forEach((btn) => {
       btn.addEventListener('click', () => {
@@ -134,7 +344,6 @@ export class UIManager {
       });
     });
 
-    // Brush slider
     const brushSlider = document.getElementById('brush-size');
     const brushSizeVal = document.getElementById('brush-size-val');
     brushSlider.addEventListener('input', (e) => {
@@ -142,35 +351,31 @@ export class UIManager {
       brushSizeVal.textContent = `${this.brushSize}px`;
     });
 
-    // Action buttons
     document.getElementById('btn-undo').addEventListener('click', () => {
       this.simulator.undo();
     });
     
     document.getElementById('btn-clear').addEventListener('click', () => {
-      if (confirm("Are you sure you want to clear the entire map?")) {
+      if (confirm("Clear all elements on this custom layout?")) {
         this.simulator.clearAll();
         this.renderer.panX = 0;
         this.renderer.panY = 0;
         this.renderer.zoom = 1.0;
-        this.updateLeaderboard(true);
       }
     });
 
-    // --- Playback Controls ---
+    // --- Simulation Controls ---
     const playBtn = document.getElementById('btn-play');
     playBtn.addEventListener('click', () => {
       this.simulator.isPaused = !this.simulator.isPaused;
       if (this.simulator.isPaused) {
-        document.body.classList.remove('pause-mode');
         playBtn.innerHTML = '<span class="play-icon"></span> Play Race';
         playBtn.classList.add('pulse-border');
       } else {
-        document.body.classList.add('pause-mode');
         playBtn.innerHTML = '<span class="play-icon"></span> Pause';
         playBtn.classList.remove('pulse-border');
         
-        // Spawn marbles if none exist
+        // Reset and spawn if all finished
         if (this.simulator.marbles.length === 0) {
           this.triggerSpawn();
         }
@@ -179,13 +384,12 @@ export class UIManager {
 
     document.getElementById('btn-reset-marbles').addEventListener('click', () => {
       this.triggerSpawn();
-      // Auto-play on reset
       if (this.simulator.isPaused) {
         playBtn.click();
       }
     });
 
-    // Spawner Config Sliders
+    // Sliders
     const marbleCountSlider = document.getElementById('marble-count');
     const marbleCountVal = document.getElementById('marble-count-val');
     marbleCountSlider.addEventListener('input', (e) => {
@@ -200,81 +404,10 @@ export class UIManager {
       speedVal.textContent = `${val}x`;
     });
 
-    // Track Lead Camera Auto Toggle
-    // We toggle tracking lead if double clicking pan, or let's create a double click canvas shortcut to track
-    canvas.addEventListener('dblclick', () => {
-      this.renderer.isTrackingLead = !this.renderer.isTrackingLead;
-      if (this.renderer.isTrackingLead) {
-        this.showToast("Camera: Auto-tracking Leader");
-      } else {
-        this.showToast("Camera: Free Pan Mode");
-      }
-    });
-
-    // --- Right Tab Switching ---
-    const tabButtons = document.querySelectorAll('.tab-btn');
-    const tabContents = document.querySelectorAll('.tab-content');
-    tabButtons.forEach((btn) => {
-      btn.addEventListener('click', () => {
-        tabButtons.forEach(b => b.classList.remove('active'));
-        tabContents.forEach(c => c.classList.remove('active'));
-        
-        btn.classList.add('active');
-        document.getElementById(`tab-${btn.dataset.tab}`).classList.add('active');
-      });
-    });
-
-    // --- Save Map Form ---
-    document.getElementById('save-map-form').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const mapName = document.getElementById('map-name').value.trim();
-      const creatorName = document.getElementById('map-creator').value.trim();
-      
-      const elements = this.simulator.exportMap();
-      if (elements.filter(el => el.type !== 'spawner').length === 0) {
-        alert("Cannot save an empty map. Draw some walls first!");
-        return;
-      }
-
-      this.showToast("Saving map...");
-      try {
-        await saveMap(mapName, creatorName, elements);
-        this.showToast("Map saved successfully!");
-        document.getElementById('map-name').value = '';
-        this.refreshMapsList();
-      } catch (err) {
-        this.showToast("Failed to save map.");
-      }
-    });
-
-    document.getElementById('btn-refresh-maps').addEventListener('click', () => {
-      this.refreshMapsList();
-    });
-
-    // Search query input
-    document.getElementById('map-search').addEventListener('input', (e) => {
-      this.filterMapsList(e.target.value.toLowerCase());
-    });
-
-    // --- Firebase configuration modal setup ---
-    const configModal = document.getElementById('firebase-modal');
-    document.getElementById('btn-open-firebase-config').addEventListener('click', () => {
-      // Prefill config from local storage if available
-      const localConfig = localStorage.getItem('fb_config');
-      if (localConfig) {
-        const config = JSON.parse(localConfig);
-        document.getElementById('fb-apiKey').value = config.apiKey || '';
-        document.getElementById('fb-authDomain').value = config.authDomain || '';
-        document.getElementById('fb-projectId').value = config.projectId || '';
-        document.getElementById('fb-storageBucket').value = config.storageBucket || '';
-        document.getElementById('fb-messagingSenderId').value = config.messagingSenderId || '';
-        document.getElementById('fb-appId').value = config.appId || '';
-      }
-      configModal.classList.remove('hidden');
-    });
-
+    // --- Firebase configuration modal ---
+    const fbModal = document.getElementById('firebase-modal');
     document.getElementById('modal-close').addEventListener('click', () => {
-      configModal.classList.add('hidden');
+      fbModal.classList.add('hidden');
     });
 
     document.getElementById('firebase-config-form').addEventListener('submit', (e) => {
@@ -292,23 +425,21 @@ export class UIManager {
         initFirebase(config);
         this.updateCloudStatus();
         this.refreshMapsList();
-        configModal.classList.add('hidden');
-        this.showToast("Connected to Firebase Cloud Firestore!");
+        fbModal.classList.add('hidden');
+        this.showToast("Database linked successfully!");
       } catch (error) {
-        alert("Failed to initialize Firebase: " + error.message);
+        alert("Failed to link Firebase config: " + error.message);
       }
     });
 
     document.getElementById('btn-fb-clear').addEventListener('click', () => {
-      if (confirm("Disconnect from Cloud Sync? This will revert back to browser offline storage.")) {
+      if (confirm("Clear Firebase configuration? Local storage will be activated instead.")) {
         clearFirebaseConfig();
         this.updateCloudStatus();
         this.refreshMapsList();
-        
-        // Clear form values
         document.getElementById('firebase-config-form').reset();
-        configModal.classList.add('hidden');
-        this.showToast("Cloud disconnected. Offline mode enabled.");
+        fbModal.classList.add('hidden');
+        this.showToast("Config cleared.");
       }
     });
   }
@@ -321,12 +452,9 @@ export class UIManager {
     
     this.simulator.spawnMarbles(count, preset);
     this.updateLeaderboard(true);
-    
-    // Show quick race toast
-    this.showToast(`Race Spawner activated! Spawning ${count} marbles.`);
   }
 
-  // --- Mouse coordinates and Drawing events ---
+  // --- Drag, Panning, and Zoom coordinates ---
   getMousePosition(e) {
     const rect = this.canvas.getBoundingClientRect();
     return {
@@ -336,23 +464,34 @@ export class UIManager {
   }
 
   handleMouseDown(e) {
+    // Blocking clicks on Main Menu and Browser
+    if (this.currentScreen === 'menu' || this.currentScreen === 'browser') return;
+    
     const mousePos = this.getMousePosition(e);
     
-    // Right click triggers viewport pan directly
-    if (e.button === 2 || this.currentTool === 'pan') {
+    // Right click OR Pan Tool activates manual scroll
+    if (e.button === 2 || this.currentTool === 'pan' || this.currentScreen === 'arena') {
       this.isPanning = true;
       this.lastPanMouseX = e.clientX;
       this.lastPanMouseY = e.clientY;
-      this.renderer.isTrackingLead = false; // Override lead tracking on manual pan
+      this.renderer.isTrackingLead = false; // Disable camera tracking during manual drag
+      
+      // Update camera indicator in HUD
+      if (this.currentScreen === 'arena') {
+        const ind = document.getElementById('camera-track-indicator');
+        ind.textContent = '🎥 Free Camera';
+        ind.style.opacity = '0.6';
+      }
       return;
     }
 
-    if (e.button === 0) { // Left click
+    // Left click on Build Editor Mode
+    if (e.button === 0 && this.currentScreen === 'editor') {
       const worldPos = this.renderer.screenToWorld(mousePos.x, mousePos.y);
       
       if (this.currentTool === 'spawner') {
         this.simulator.setSpawner(worldPos.x, worldPos.y);
-        this.showToast("Spawner point moved.");
+        this.showToast("Spawner repositioned");
         return;
       }
       
@@ -370,6 +509,8 @@ export class UIManager {
   }
 
   handleMouseMove(e) {
+    if (this.currentScreen === 'menu' || this.currentScreen === 'browser') return;
+    
     const mousePos = this.getMousePosition(e);
     const worldPos = this.renderer.screenToWorld(mousePos.x, mousePos.y);
     
@@ -386,14 +527,12 @@ export class UIManager {
     if (this.isDrawing && this.activeDrawingPath) {
       const points = this.activeDrawingPath.points;
       const lastPoint = points[points.length - 1];
-      
-      // Calculate travel distance to prevent duplicate overlapping coordinates
       const dist = Math.hypot(worldPos.x - lastPoint.x, worldPos.y - lastPoint.y);
       
       if (this.currentTool === 'eraser') {
         this.eraseAtPosition(worldPos);
-        points.push(worldPos); // Record eraser brush paths visually
-      } else if (dist > 6) { // Draw points at reasonable spacing
+        points.push(worldPos);
+      } else if (dist > 6) {
         points.push(worldPos);
       }
     }
@@ -420,8 +559,8 @@ export class UIManager {
     }
   }
 
-  // Touch Screen events handler mapping
   handleTouchStart(e) {
+    if (this.currentScreen === 'menu' || this.currentScreen === 'browser') return;
     if (e.touches.length === 1) {
       const touch = e.touches[0];
       const mouseEvent = new MouseEvent('mousedown', {
@@ -431,7 +570,6 @@ export class UIManager {
       });
       this.canvas.dispatchEvent(mouseEvent);
     } else if (e.touches.length === 2) {
-      // Two fingers triggers drag panning
       this.isPanning = true;
       const t1 = e.touches[0];
       const t2 = e.touches[1];
@@ -443,6 +581,7 @@ export class UIManager {
   }
 
   handleTouchMove(e) {
+    if (this.currentScreen === 'menu' || this.currentScreen === 'browser') return;
     if (e.touches.length === 1) {
       const touch = e.touches[0];
       const mouseEvent = new MouseEvent('mousemove', {
@@ -467,33 +606,28 @@ export class UIManager {
   }
 
   handleWheel(e) {
+    if (this.currentScreen === 'menu' || this.currentScreen === 'browser') return;
     e.preventDefault();
     const zoomFactor = e.deltaY < 0 ? 1.08 : 0.92;
-    
-    // Zoom toward the current mouse position
     const mousePos = this.getMousePosition(e);
     const mouseWorld = this.renderer.screenToWorld(mousePos.x, mousePos.y);
     
     const oldZoom = this.renderer.zoom;
     this.renderer.zoom = Math.min(Math.max(this.renderer.zoom * zoomFactor, 0.2), 3.5);
     
-    // Adjust pan coordinates so mouse focus doesn't jump
     const zoomDiff = this.renderer.zoom - oldZoom;
     this.renderer.panX -= (mouseWorld.x - this.canvas.width / 2) * zoomDiff;
     this.renderer.panY -= (mouseWorld.y - this.canvas.height / 2) * zoomDiff;
   }
 
-  // Eraser collision checks
   eraseAtPosition(worldPos) {
     const elements = this.simulator.staticElements;
     const eraseRadius = this.brushSize + 10;
     
     for (let i = elements.length - 1; i >= 0; i--) {
       const el = elements[i];
+      if (el.type === 'spawner') continue;
       
-      if (el.type === 'spawner') continue; // Don't delete spawners via eraser
-      
-      // Check if mouse point lies close to any vertices
       let hits = false;
       for (const p of el.points) {
         if (Math.hypot(p.x - worldPos.x, p.y - worldPos.y) < eraseRadius) {
@@ -502,7 +636,6 @@ export class UIManager {
         }
       }
       
-      // Check segment intersections
       if (!hits) {
         for (let j = 0; j < el.points.length - 1; j++) {
           const p1 = el.points[j];
@@ -516,7 +649,6 @@ export class UIManager {
       }
 
       if (hits) {
-        // Remove from simulator
         if (el.bodies) {
           el.bodies.forEach(b => Matter.World.remove(this.simulator.world, b));
         }
@@ -525,7 +657,6 @@ export class UIManager {
     }
   }
 
-  // Help math for distance of point to line segment
   distToSegment(p, v, w) {
     const l2 = Math.pow(v.x - w.x, 2) + Math.pow(v.y - w.y, 2);
     if (l2 === 0) return Math.hypot(p.x - v.x, p.y - v.y);
@@ -537,27 +668,22 @@ export class UIManager {
     );
   }
 
-  // --- UI Leaderboard update loop ---
+  // --- Leaderboards Renders ---
   updateLeaderboard(forceReset = false) {
     const listEl = document.getElementById('leaderboard-list');
+    if (!listEl) return;
     
     if (forceReset || (this.simulator.marbles.length === 0)) {
       listEl.innerHTML = '<div class="no-data-msg">Race not started. Click "Play Race" to spawn marbles!</div>';
       return;
     }
 
-    // Leaderboard rankings rules:
-    // 1. Finished marbles sorted by time (ascending)
-    // 2. Unfinished marbles sorted by Y position (descending - largest Y is further down)
     const finished = [...this.simulator.finishedMarbles];
-    
     const unfinished = this.simulator.marbles
       .filter(m => !m.finished)
-      .sort((a, b) => b.position.y - a.position.y); // Largest Y (furthest down) comes first
+      .sort((a, b) => b.position.y - a.position.y);
     
     let html = '';
-    
-    // Render Finished
     finished.forEach((record, index) => {
       const medalClass = index === 0 ? 'gold' : index === 1 ? 'silver' : index === 2 ? 'bronze' : '';
       const displayTime = record.time.toFixed(2) + 's';
@@ -574,7 +700,6 @@ export class UIManager {
       `;
     });
     
-    // Render Active Racers
     unfinished.forEach((m, index) => {
       const rank = finished.length + index + 1;
       const medalClass = rank === 1 ? 'gold' : rank === 2 ? 'silver' : rank === 3 ? 'bronze' : '';
@@ -594,38 +719,48 @@ export class UIManager {
     listEl.innerHTML = html;
   }
 
-  // --- Sharing and explore maps loading ---
+  // --- Cloud Badging ---
   updateCloudStatus() {
-    const badge = document.getElementById('firebase-status-badge');
-    const cloudBtn = document.getElementById('btn-open-firebase-config');
+    const menuBadge = document.getElementById('menu-firebase-badge');
+    const syncBtn = document.getElementById('menu-btn-cloud');
     
     if (isFirebaseConnected()) {
-      badge.className = 'badge badge-online';
-      badge.textContent = 'Cloud Connected';
-      cloudBtn.textContent = 'Change DB Sync';
+      if (menuBadge) {
+        menuBadge.className = 'badge badge-online';
+        menuBadge.textContent = 'Cloud Sync On';
+      }
+      if (syncBtn) {
+        syncBtn.innerHTML = '<span class="btn-icon">⚙️</span> Cloud Connected';
+      }
     } else {
-      badge.className = 'badge badge-offline';
-      badge.textContent = 'Offline Storage';
-      cloudBtn.textContent = 'Setup Cloud Sync';
+      if (menuBadge) {
+        menuBadge.className = 'badge badge-offline';
+        menuBadge.textContent = 'Offline';
+      }
+      if (syncBtn) {
+        syncBtn.innerHTML = '<span class="btn-icon">⚙️</span> Connect Cloud DB';
+      }
     }
   }
 
   async refreshMapsList() {
     const listEl = document.getElementById('shared-maps-list');
-    listEl.innerHTML = '<div class="no-data-msg">Loading tracks...</div>';
+    if (!listEl) return;
+    listEl.innerHTML = '<div class="no-data-msg">Loading tracks from database...</div>';
     
     try {
       this.loadedMaps = await fetchAllMaps();
       this.renderMapsList(this.loadedMaps);
     } catch (e) {
-      listEl.innerHTML = '<div class="no-data-msg">Error loading map library.</div>';
+      listEl.innerHTML = '<div class="no-data-msg">Error loading track library.</div>';
     }
   }
 
   renderMapsList(maps) {
     const listEl = document.getElementById('shared-maps-list');
+    if (!listEl) return;
     if (maps.length === 0) {
-      listEl.innerHTML = '<div class="no-data-msg">No maps found. Be the first to build a map!</div>';
+      listEl.innerHTML = '<div class="no-data-msg">No tracks found. Clear the sandbox and draw your own!</div>';
       return;
     }
     
@@ -641,11 +776,11 @@ export class UIManager {
             <span class="map-card-creator">By ${map.creator} | ${dateStr}</span>
           </div>
           <div class="map-card-actions">
-            <button class="like-btn" data-id="${map.id}" title="Like this track">
+            <button class="like-btn" data-id="${map.id}">
               ❤️ <span class="like-count">${map.likes || 0}</span>
             </button>
             <button class="action-btn primary-btn btn-load-map" data-id="${map.id}">
-              Play Track
+              Load & Race
             </button>
           </div>
         </div>
@@ -654,25 +789,20 @@ export class UIManager {
     
     listEl.innerHTML = html;
     
-    // Bind buttons in list
+    // Bind click load & play actions
     listEl.querySelectorAll('.btn-load-map').forEach((btn) => {
       btn.addEventListener('click', () => {
         const id = btn.dataset.id;
         const targetMap = this.loadedMaps.find(m => m.id === id);
         if (targetMap) {
+          // Clear background intervals
+          if (this.bgCheckInterval) clearInterval(this.bgCheckInterval);
+          
           this.simulator.loadMap(targetMap);
-          // Pause and reset UI elements
-          this.simulator.isPaused = true;
-          document.body.classList.remove('pause-mode');
+          document.getElementById('arena-track-title').textContent = targetMap.name;
           
-          const playBtn = document.getElementById('btn-play');
-          playBtn.innerHTML = '<span class="play-icon"></span> Play Race';
-          playBtn.classList.add('pulse-border');
-          
-          this.updateLeaderboard(true);
-          this.renderer.panX = 0;
-          this.renderer.panY = 0;
-          this.renderer.zoom = 1.0;
+          // Switch to Race Simulator HUD
+          this.changeScreen('arena');
           
           this.showToast(`Track Loaded: "${targetMap.name}"`);
         }
@@ -680,7 +810,8 @@ export class UIManager {
     });
 
     listEl.querySelectorAll('.like-btn').forEach((btn) => {
-      btn.addEventListener('click', async () => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
         const id = btn.dataset.id;
         const success = await likeMap(id);
         if (success) {
@@ -703,9 +834,7 @@ export class UIManager {
     this.renderMapsList(filtered);
   }
 
-  // --- Dynamic visual indicators (Toasts) ---
   showToast(message) {
-    // Remove existing Toast
     const oldToast = document.querySelector('.toast-hud');
     if (oldToast) oldToast.remove();
     
@@ -728,7 +857,6 @@ export class UIManager {
     
     document.body.appendChild(toast);
     
-    // Fade out after 2.5s
     setTimeout(() => {
       toast.style.transition = 'opacity 0.5s ease';
       toast.style.opacity = '0';
