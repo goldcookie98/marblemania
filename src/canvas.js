@@ -196,7 +196,7 @@ export class CanvasRenderer {
     this.drawGrid();
     
     // 2. Draw walls, goals, and hazards
-    this.drawStaticElements(simulator.staticElements);
+    this.drawStaticElements(simulator.staticElements, simulator);
 
     // 3. Draw active drawing path
     if (activeDrawing) {
@@ -252,12 +252,16 @@ export class CanvasRenderer {
     }
   }
 
-  drawStaticElements(elements) {
+  drawStaticElements(elements, simulator) {
     const { ctx } = this;
 
     elements.forEach((el) => {
       if (el.type === 'spawner') {
-        this.drawSpawner(el);
+        this.drawSpawner(el, simulator);
+        return;
+      }
+      if (el.type === 'cog') {
+        this.drawCog(el);
         return;
       }
       if (el.type === 'arena_boundary') {
@@ -437,12 +441,16 @@ export class CanvasRenderer {
     ctx.restore();
   }
 
-  drawSpawner(spawner) {
+  drawSpawner(spawner, simulator) {
     const { ctx } = this;
     const r = spawner.radius || 15;
     
     ctx.save();
     ctx.translate(spawner.x, spawner.y);
+    
+    // Rotate visually based on physical body angle
+    const angle = (simulator && simulator.spawnerBody) ? simulator.spawnerBody.angle : 0;
+    ctx.rotate(angle);
     
     ctx.strokeStyle = '#ffe600';
     ctx.lineWidth = 3;
@@ -455,17 +463,115 @@ export class CanvasRenderer {
     ctx.arc(0, 0, r, 0, Math.PI * 2);
     ctx.fill();
     
+    // Draw visual blades/spokes to show rotation
+    ctx.strokeStyle = 'rgba(255, 230, 0, 0.5)';
+    ctx.lineWidth = 2;
+    for (let i = 0; i < 4; i++) {
+      const a = (i / 4) * Math.PI * 2;
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+      ctx.stroke();
+    }
+    
     ctx.strokeStyle = '#ffe600';
     ctx.lineWidth = 1.5;
     ctx.beginPath();
     ctx.arc(0, 0, r, 0, Math.PI * 2);
     ctx.stroke();
     
+    // Keep text upright
+    ctx.rotate(-angle);
     ctx.fillStyle = '#000000';
     ctx.font = 'bold 8px sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText('SPAWN', 0, 0.5);
+    
+    ctx.restore();
+  }
+
+  drawCog(cog) {
+    const { ctx } = this;
+    const r = cog.radius || 15;
+    ctx.save();
+    ctx.translate(cog.x, cog.y);
+    
+    const rot = cog.angle || 0;
+    ctx.rotate(rot);
+    
+    // Draw gear teeth
+    ctx.fillStyle = '#7a7a7a';
+    ctx.strokeStyle = '#3a3a3a';
+    ctx.lineWidth = 2;
+    
+    const teeth = 8;
+    ctx.beginPath();
+    for (let i = 0; i < teeth; i++) {
+      const angle = (i / teeth) * Math.PI * 2;
+      const nextAngle = ((i + 0.5) / teeth) * Math.PI * 2;
+      const nextAngle2 = ((i + 1) / teeth) * Math.PI * 2;
+      
+      const x1 = Math.cos(angle) * r;
+      const y1 = Math.sin(angle) * r;
+      const x2 = Math.cos(angle) * (r + 5);
+      const y2 = Math.sin(angle) * (r + 5);
+      const x3 = Math.cos(nextAngle) * (r + 5);
+      const y3 = Math.sin(nextAngle) * (r + 5);
+      const x4 = Math.cos(nextAngle) * r;
+      const y4 = Math.sin(nextAngle) * r;
+      
+      if (i === 0) {
+        ctx.moveTo(x1, y1);
+      } else {
+        ctx.lineTo(x1, y1);
+      }
+      ctx.lineTo(x2, y2);
+      ctx.lineTo(x3, y3);
+      ctx.lineTo(x4, y4);
+      ctx.arc(0, 0, r, nextAngle, nextAngle2);
+    }
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    
+    // Draw center hole
+    ctx.fillStyle = '#7b92ff';
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 0.4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    
+    // Draw center pin
+    ctx.fillStyle = '#ffe600';
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 0.15, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Draw an indicator arrow inside to show spin direction (flipped if direction is -1)
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 1.5;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    
+    const dir = cog.direction || 1;
+    const startA = dir > 0 ? -Math.PI / 3 : Math.PI / 3;
+    const endA = dir > 0 ? Math.PI / 3 : -Math.PI / 3;
+    ctx.arc(0, 0, r * 0.65, startA, endA, dir < 0);
+    ctx.stroke();
+    
+    // Arrow head
+    ctx.save();
+    ctx.translate(Math.cos(endA) * r * 0.65, Math.sin(endA) * r * 0.65);
+    ctx.rotate(endA + (dir > 0 ? Math.PI / 2 : -Math.PI / 2));
+    ctx.fillStyle = '#fff';
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(-3, -5);
+    ctx.lineTo(3, -5);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
     
     ctx.restore();
   }

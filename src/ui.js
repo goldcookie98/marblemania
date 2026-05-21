@@ -1,3 +1,4 @@
+import Matter from 'matter-js';
 import {
   saveMap,
   fetchAllMaps
@@ -176,7 +177,7 @@ export class UIManager {
       // Keep menu physics running softly behind list
     } else if (screenName === 'editor') {
       // Sandbox: clear marbles and pause physics so drawing is static
-      this.simulator.isPaused = true;
+      this.simulator.setPaused(true);
       this.simulator.marbles.forEach(m => Matter.World.remove(this.simulator.world, m));
       this.simulator.marbles = [];
       this.simulator.finishedMarbles = [];
@@ -189,7 +190,7 @@ export class UIManager {
       }
     } else if (screenName === 'arena') {
       // Ready to race
-      this.simulator.isPaused = true;
+      this.simulator.setPaused(true);
 
       // Reset play button state
       const playBtn = document.getElementById('btn-play');
@@ -237,7 +238,7 @@ export class UIManager {
 
   // Spawns low count marbles to create animated backdrop in main menu
   async loadBackgroundDemo() {
-    this.simulator.isPaused = false;
+    this.simulator.setPaused(false);
     this.simulator.physicsSpeed = 1.0;
     this.renderer.playerRacerId = null;
     this.simulator.menuMode = true;
@@ -478,6 +479,10 @@ export class UIManager {
       }
     });
 
+    document.getElementById('editor-btn-test').addEventListener('click', () => {
+      this.testMarble();
+    });
+
     const saveModal = document.getElementById('save-map-modal');
     document.getElementById('editor-btn-save-trigger').addEventListener('click', () => {
       const elements = this.simulator.exportMap();
@@ -560,7 +565,7 @@ export class UIManager {
     // --- Simulation Controls ---
     const playBtn = document.getElementById('btn-play');
     playBtn.addEventListener('click', () => {
-      this.simulator.isPaused = !this.simulator.isPaused;
+      this.simulator.setPaused(!this.simulator.isPaused);
       if (this.simulator.isPaused) {
         playBtn.innerHTML = '<span class="play-icon"></span> Play Race';
         playBtn.classList.add('pulse-border');
@@ -633,6 +638,24 @@ export class UIManager {
     this.updateLeaderboard(true);
   }
 
+  testMarble() {
+    this.simulator.marbles.forEach(m => Matter.World.remove(this.simulator.world, m));
+    this.simulator.marbles = [];
+    this.simulator.finishedMarbles = [];
+    
+    const racerConfigs = [{ ...this.selectedRacer, isPlayer: true }];
+    this.simulator.spawnMarbles(1, racerConfigs);
+
+    const playerBody = this.simulator.marbles.find(m => m.isPlayer);
+    if (playerBody) {
+      this.renderer.playerRacerId = playerBody.id;
+    }
+
+    this.simulator.setPaused(false);
+    this.renderer.isTrackingLead = true;
+    this.showToast("Testing track with 1 marble!");
+  }
+
   // --- Drag, Panning, and Zoom coordinates ---
   getMousePosition(e) {
     const rect = this.canvas.getBoundingClientRect();
@@ -669,6 +692,27 @@ export class UIManager {
       if (this.currentTool === 'spawner') {
         this.simulator.setSpawner(worldPos.x, worldPos.y);
         this.showToast("Spawner repositioned");
+        return;
+      }
+
+      if (this.currentTool === 'cog') {
+        const existingCog = this.simulator.staticElements.find(
+          el => el.type === 'cog' && Math.hypot(worldPos.x - el.x, worldPos.y - el.y) <= 15
+        );
+        if (existingCog) {
+          existingCog.direction = (existingCog.direction || 1) * -1;
+          this.showToast("Cog rotation direction toggled");
+        } else {
+          this.simulator.staticElements.push({
+            type: 'cog',
+            x: worldPos.x,
+            y: worldPos.y,
+            radius: 15,
+            direction: 1,
+            angle: 0
+          });
+          this.showToast("Cog placed");
+        }
         return;
       }
 
@@ -851,7 +895,12 @@ export class UIManager {
 
       let hits = false;
 
-      if (el.type === 'shape') {
+      if (el.type === 'cog') {
+        const d = Math.hypot(worldPos.x - el.x, worldPos.y - el.y);
+        if (d < (el.radius || 15) + eraseRadius) {
+          hits = true;
+        }
+      } else if (el.type === 'shape') {
         if (el.shape === 'rect') {
           const x = Math.min(el.geom.x, el.geom.x + el.geom.w);
           const y = Math.min(el.geom.y, el.geom.y + el.geom.h);
@@ -1238,7 +1287,7 @@ export class UIManager {
     // Wait until startAt then unpause
     const wait = Math.max(0, at - Date.now());
     setTimeout(() => {
-      this.simulator.isPaused = false;
+      this.simulator.setPaused(false);
       if (this.simulator.spawnGate && !this.simulator.spawnGate.isOpen) {
         this.simulator.scheduleGateOpen(3000);
       }
@@ -1248,7 +1297,7 @@ export class UIManager {
 
   onMpReset() {
     if (this.mpBroadcastInterval) clearInterval(this.mpBroadcastInterval);
-    this.simulator.isPaused = true;
+    this.simulator.setPaused(true);
     this.changeScreen('menu');
   }
 

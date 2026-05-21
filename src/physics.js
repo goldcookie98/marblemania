@@ -19,6 +19,8 @@ export class PhysicsSimulator {
     this.spawnGate = null;
     this.menuMode = false;
     this.remoteMarbles = new Map(); // id -> { name, color, marbleName, x, y, targetX, targetY, vx, vy }
+    this.spawnerBody = null;
+    this.rotatingBodies = [];
   }
 
   upsertRemoteMarble(id, data) {
@@ -140,6 +142,15 @@ export class PhysicsSimulator {
     });
     this.world = this.engine.world;
     this.setupCollisionHandler();
+
+    // Create a rotating physical body under the spawner to throw marbles
+    this.spawnerBody = Bodies.circle(this.spawner.x, this.spawner.y, this.spawner.radius || 15, {
+      isStatic: true,
+      friction: 0.8,
+      restitution: 0.45,
+      label: 'spawner_body'
+    });
+    World.add(this.world, this.spawnerBody);
   }
 
   // Hook up event listeners for goals and hazards
@@ -270,8 +281,8 @@ export class PhysicsSimulator {
       body = Bodies.rectangle(cx, cy, w, h, {
         isStatic: true,
         isSensor,
-        restitution: 0.6,
-        friction: 0.05,
+        restitution: 0.4,
+        friction: 0.15,
         label: labelName
       });
       normGeom = { x: geom.x, y: geom.y, w: geom.w, h: geom.h };
@@ -280,8 +291,8 @@ export class PhysicsSimulator {
       body = Bodies.circle(geom.cx, geom.cy, r, {
         isStatic: true,
         isSensor,
-        restitution: 0.6,
-        friction: 0.05,
+        restitution: 0.4,
+        friction: 0.15,
         label: labelName
       });
       normGeom = { cx: geom.cx, cy: geom.cy, r };
@@ -320,16 +331,16 @@ export class PhysicsSimulator {
       const segment = Bodies.rectangle(cx, cy, L, thickness, {
         isStatic: true,
         angle: angle,
-        friction: 0.05,
-        restitution: 0.8, // Bouncy walls
+        friction: 0.15,
+        restitution: 0.45,
         label: 'wall'
       });
       
       // Joint circle at endpoint to prevent snagging on gaps
       const joint = Bodies.circle(p2.x, p2.y, thickness / 2, {
         isStatic: true,
-        friction: 0.05,
-        restitution: 0.8,
+        friction: 0.15,
+        restitution: 0.45,
         label: 'wall_joint'
       });
       
@@ -407,6 +418,10 @@ export class PhysicsSimulator {
     this.spawner.x = x;
     this.spawner.y = y;
     
+    if (this.spawnerBody) {
+      Body.setPosition(this.spawnerBody, { x, y });
+    }
+    
     // Update spawner record in static elements
     const idx = this.staticElements.findIndex(e => e.type === 'spawner');
     if (idx !== -1) {
@@ -446,16 +461,21 @@ export class PhysicsSimulator {
         spawnX = this.spawner.x + Math.cos(angle) * r;
         spawnY = this.spawner.y + Math.sin(angle) * r;
       } else {
-        const row = Math.floor(i / 5);
-        const col = i % 5;
-        spawnX = this.spawner.x + (col - 2) * 16 + (Math.random() - 0.5) * 4;
-        spawnY = this.spawner.y - 30 - (row * 22) + (Math.random() - 0.5) * 4;
+        if (count === 1) {
+          spawnX = this.spawner.x;
+          spawnY = this.spawner.y - 18;
+        } else {
+          const row = Math.floor(i / 5);
+          const col = i % 5;
+          spawnX = this.spawner.x + (col - 2) * 12 + (Math.random() - 0.5) * 2;
+          spawnY = this.spawner.y - 15 - (row * 20) + (Math.random() - 0.5) * 2;
+        }
       }
 
       const marble = Bodies.circle(spawnX, spawnY, radius, {
-        restitution: 0.65,
-        friction: 0.005,
-        frictionAir: 0.002,
+        restitution: 0.45,
+        friction: 0.15,
+        frictionAir: 0.001,
         density: 0.001,
         label: 'marble'
       });
@@ -537,6 +557,15 @@ export class PhysicsSimulator {
     mapData.elements.forEach((el) => {
       if (el.type === 'spawner') {
         this.setSpawner(el.x, el.y);
+      } else if (el.type === 'cog') {
+        this.staticElements.push({
+          type: 'cog',
+          x: el.x,
+          y: el.y,
+          radius: el.radius || 15,
+          direction: el.direction || 1,
+          angle: 0
+        });
       } else if (el.type === 'wall') {
         this.addWall(el.points, el.thickness || 12);
       } else if (el.type === 'goal') {
@@ -556,6 +585,8 @@ export class PhysicsSimulator {
       if (el.type === 'arena_boundary') return;
       if (el.type === 'spawner') {
         out.push({ type: 'spawner', x: el.x, y: el.y, radius: el.radius });
+      } else if (el.type === 'cog') {
+        out.push({ type: 'cog', x: el.x, y: el.y, radius: el.radius, direction: el.direction || 1 });
       } else if (el.type === 'shape') {
         out.push({ type: 'shape', category: el.category, shape: el.shape, geom: el.geom });
       } else {
@@ -565,14 +596,159 @@ export class PhysicsSimulator {
     return out;
   }
 
+  setPaused(paused) {
+    if (this.isPaused === paused) return;
+    this.isPaused = paused;
+    if (paused) {
+      this.restoreRotatingBodies();
+      if (this.spawnerBody) {
+        Body.setStatic(this.spawnerBody, true);
+        Body.setVelocity(this.spawnerBody, { x: 0, y: 0 });
+        Body.setAngularVelocity(this.spawnerBody, 0);
+      }
+    } else {
+      this.compileRotatingBodies();
+      if (this.spawnerBody) {
+        Body.setStatic(this.spawnerBody, false);
+      }
+    }
+  }
+
+  compileRotatingBodies() {
+    this.rotatingBodies = [];
+    const cogs = this.staticElements.filter(el => el.type === 'cog');
+    if (cogs.length === 0) return;
+
+    this.staticElements.forEach((el) => {
+      if (el.type !== 'shape' && el.type !== 'wall') return;
+      if (!el.bodies || el.bodies.length === 0) return;
+
+      const associatedCog = cogs.find(cog => this.isCogOnElement(cog, el));
+      if (associatedCog) {
+        el.bodies.forEach((body) => {
+          Body.setStatic(body, false);
+          this.rotatingBodies.push({
+            body,
+            cog: associatedCog,
+            offsetAngle: body.angle,
+            dx: body.position.x - associatedCog.x,
+            dy: body.position.y - associatedCog.y,
+            currentAngle: body.angle
+          });
+        });
+      }
+    });
+  }
+
+  restoreRotatingBodies() {
+    if (!this.rotatingBodies) return;
+    this.rotatingBodies.forEach((rb) => {
+      Body.setStatic(rb.body, true);
+      const originalX = rb.cog.x + rb.dx;
+      const originalY = rb.cog.y + rb.dy;
+      Body.setPosition(rb.body, { x: originalX, y: originalY });
+      Body.setAngle(rb.body, rb.offsetAngle);
+      Body.setVelocity(rb.body, { x: 0, y: 0 });
+      Body.setAngularVelocity(rb.body, 0);
+    });
+    this.rotatingBodies = [];
+  }
+
+  isCogOnElement(cog, el) {
+    if (el.type === 'shape') {
+      if (el.shape === 'rect') {
+        const x = Math.min(el.geom.x, el.geom.x + el.geom.w);
+        const y = Math.min(el.geom.y, el.geom.y + el.geom.h);
+        const w = Math.abs(el.geom.w);
+        const h = Math.abs(el.geom.h);
+        return cog.x >= x && cog.x <= x + w && cog.y >= y && cog.y <= y + h;
+      } else if (el.shape === 'circle') {
+        const dist = Math.hypot(cog.x - el.geom.cx, cog.y - el.geom.cy);
+        return dist <= el.geom.r;
+      }
+    } else if (el.type === 'wall') {
+      const points = el.points;
+      const thickness = el.thickness || 12;
+      const threshold = thickness / 2 + 10;
+      for (let i = 0; i < points.length - 1; i++) {
+        const p1 = points[i];
+        const p2 = points[i + 1];
+        if (this.distanceToSegment(cog, p1, p2) <= threshold) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  distanceToSegment(p, a, b) {
+    const l2 = Math.hypot(b.x - a.x, b.y - a.y) ** 2;
+    if (l2 === 0) return Math.hypot(p.x - a.x, p.y - a.y);
+    let t = ((p.x - a.x) * (b.x - a.x) + (p.y - a.y) * (b.y - a.y)) / l2;
+    t = Math.max(0, Math.min(1, t));
+    return Math.hypot(p.x - (a.x + t * (b.x - a.x)), p.y - (a.y + t * (b.y - a.y)));
+  }
+
+  updateRotatingBodies(dt) {
+    // Rotate cogs visually
+    const cogs = this.staticElements.filter(el => el.type === 'cog');
+    const omegaBase = 1.2;
+    cogs.forEach((cog) => {
+      if (!cog.angle) cog.angle = 0;
+      cog.angle += omegaBase * (cog.direction || 1) * dt;
+    });
+
+    if (!this.rotatingBodies || this.rotatingBodies.length === 0) return;
+
+    this.rotatingBodies.forEach((rb) => {
+      const omega = omegaBase * (rb.cog.direction || 1);
+      rb.currentAngle += omega * dt;
+      
+      const cos = Math.cos(rb.currentAngle - rb.offsetAngle);
+      const sin = Math.sin(rb.currentAngle - rb.offsetAngle);
+      
+      const rx = rb.dx * cos - rb.dy * sin;
+      const ry = rb.dx * sin + rb.dy * cos;
+      
+      const newX = rb.cog.x + rx;
+      const newY = rb.cog.y + ry;
+      
+      const vx = -omega * ry;
+      const vy = omega * rx;
+
+      Body.setPosition(rb.body, { x: newX, y: newY });
+      Body.setAngle(rb.body, rb.currentAngle);
+      Body.setVelocity(rb.body, { x: vx, y: vy });
+      Body.setAngularVelocity(rb.body, omega);
+    });
+  }
+
+  updateSpawnerBody(dt) {
+    if (!this.spawnerBody) return;
+    const omega = 8.0;
+    
+    // Force set position to match spawner anchor
+    Body.setPosition(this.spawnerBody, { x: this.spawner.x, y: this.spawner.y });
+    Body.setVelocity(this.spawnerBody, { x: 0, y: 0 });
+    
+    const newAngle = this.spawnerBody.angle + omega * dt;
+    Body.setAngle(this.spawnerBody, newAngle);
+    Body.setAngularVelocity(this.spawnerBody, omega);
+  }
+
   // Tick step called by the canvas requestAnimationFrame loop
   tick(fpsDeltaTime = 16.666) {
     if (this.isPaused) return;
 
-    const steps = Math.ceil(this.physicsSpeed);
+    // Use 4x substepping for physics precision and stability
+    const baseSubsteps = 4;
+    const steps = Math.ceil(this.physicsSpeed * baseSubsteps);
     const stepTime = (fpsDeltaTime * this.physicsSpeed) / steps;
 
     for (let i = 0; i < steps; i++) {
+      const dtSec = Math.min(stepTime, 30) / 1000;
+      this.updateRotatingBodies(dtSec);
+      this.updateSpawnerBody(dtSec);
       Engine.update(this.engine, Math.min(stepTime, 30));
     }
 

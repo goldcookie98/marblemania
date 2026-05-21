@@ -417,6 +417,20 @@ body, html {
   font-size: 12px;
 }
 
+#editor-btn-test {
+  background: rgba(57, 255, 20, 0.1);
+  border: 1px solid var(--neon-green);
+  color: var(--neon-green);
+  box-shadow: 0 0 8px rgba(57, 255, 20, 0.25);
+  transition: all 0.2s ease-in-out;
+}
+
+#editor-btn-test:hover {
+  background: rgba(57, 255, 20, 0.25);
+  box-shadow: 0 0 14px rgba(57, 255, 20, 0.4);
+  color: #fff;
+}
+
 /* Sidebars - Algodoo Flat styles */
 .sidebar {
   position: absolute;
@@ -643,6 +657,19 @@ h2.section-title {
   transform: rotate(45deg);
   width: 10px;
   height: 14px;
+}
+
+.cog-tool-icon {
+  background: #888;
+  border: 2.5px dashed #444;
+  border-radius: 50%;
+  width: 14px;
+  height: 14px;
+  box-sizing: border-box;
+}
+.tool-btn.active .cog-tool-icon {
+  border-color: var(--neon-blue);
+  box-shadow: 0 0 8px var(--neon-blue);
 }
 
 .pan-icon {
