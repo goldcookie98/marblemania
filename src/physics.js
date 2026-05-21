@@ -83,8 +83,9 @@ export class PhysicsSimulator {
       const seg = Bodies.rectangle(cx, cy, L * 1.05, thickness, {
         isStatic: true,
         angle,
-        restitution: 0.7,
-        friction: 0.05,
+        restitution: 0.4,
+        friction: 1.0,
+        frictionStatic: 1.0,
         label: 'spawn_gate'
       });
       World.add(this.world, seg);
@@ -556,12 +557,12 @@ export class PhysicsSimulator {
         }
       }
 
-      const marble = Bodies.circle(spawnX, spawnY, radius, {
-        restitution: 0.3,
-        friction: 0.9,
-        frictionStatic: 1.0,
-        frictionAir: 0.012,
-        density: 0.008,
+       const marble = Bodies.circle(spawnX, spawnY, radius, {
+        restitution: 0.4,
+        friction: 0.08,
+        frictionStatic: 0.1,
+        frictionAir: 0.015,
+        density: 0.001,
         label: 'marble'
       });
 
@@ -868,6 +869,75 @@ export class PhysicsSimulator {
     });
   }
 
+  updateSpawnGatePhysics(dt) {
+    if (!this.spawnGate || this.spawnGate.isOpen) return;
+
+    // Spin speed: 1.6 rad/s.
+    const omega = 1.6;
+    const sx = this.spawnGate.x;
+    const sy = this.spawnGate.y;
+    const radius = this.spawnGate.radius;
+    const marbleRadius = 10;
+
+    // 1. Physical segment positioning and rotation
+    this.spawnGate.segments.forEach((seg) => {
+      seg.a1 += omega * dt;
+      seg.a2 += omega * dt;
+
+      const midAngle = (seg.a1 + seg.a2) / 2;
+      const newX = sx + Math.cos(midAngle) * radius;
+      const newY = sy + Math.sin(midAngle) * radius;
+
+      const vx = -omega * radius * Math.sin(midAngle);
+      const vy = omega * radius * Math.cos(midAngle);
+
+      Body.setPosition(seg.body, { x: newX, y: newY });
+      Body.setAngle(seg.body, midAngle + Math.PI / 2);
+      Body.setVelocity(seg.body, { x: vx, y: vy });
+      Body.setAngularVelocity(seg.body, omega);
+    });
+
+    // 2. Manual friction/traction transfer from the outer rotating gate wall to inner marbles
+    const contactThreshold = radius - marbleRadius - 3.0; // marbles touching/near the outer wall
+    this.marbles.forEach((marble) => {
+      if (marble.finished) return;
+      const dx = marble.position.x - sx;
+      const dy = marble.position.y - sy;
+      const dist = Math.hypot(dx, dy);
+
+      if (dist > 0.1 && dist >= contactThreshold) {
+        const nx = dx / dist;
+        const ny = dy / dist;
+
+        // Tangent vector pointing clockwise along outer wall
+        const tx = -ny;
+        const ty = nx;
+
+        // Linear velocity at the outer wall
+        const surfaceSpeed = omega * radius;
+
+        // Correct velocity to match the gate's spinning motion
+        const currentTangentSpeed = marble.velocity.x * tx + marble.velocity.y * ty;
+        const speedDifference = surfaceSpeed - currentTangentSpeed;
+        const speedCorrection = speedDifference * 0.35;
+
+        Body.setVelocity(marble, {
+          x: marble.velocity.x + tx * speedCorrection,
+          y: marble.velocity.y + ty * speedCorrection
+        });
+
+        // Anti-clipping push to keep marbles inside the spawn gate
+        const overlap = dist - contactThreshold;
+        if (overlap > 0) {
+          Body.setPosition(marble, {
+            x: marble.position.x - nx * overlap * 0.2,
+            y: marble.position.y - ny * overlap * 0.2
+          });
+        }
+      }
+    });
+  }
+
   // Tick step called by the canvas requestAnimationFrame loop
   tick(fpsDeltaTime = 16.666) {
     if (this.isPaused) return;
@@ -881,6 +951,7 @@ export class PhysicsSimulator {
       const dtSec = Math.min(stepTime, 30) / 1000;
       this.updateRotatingBodies(dtSec);
       this.updateSpawnerBody(dtSec);
+      this.updateSpawnGatePhysics(dtSec);
       Engine.update(this.engine, Math.min(stepTime, 30));
     }
 
