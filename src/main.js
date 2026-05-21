@@ -1,19 +1,29 @@
 import { PhysicsSimulator } from './physics';
 import { CanvasRenderer } from './canvas';
 import { UIManager } from './ui';
-import { loadFirebaseConfig } from './firebase-db';
 
 document.addEventListener('DOMContentLoaded', () => {
-  // 1. Try to auto-connect Firebase from local storage credentials
-  const fbStatus = loadFirebaseConfig();
-  console.log("Firebase connection check:", fbStatus);
+  // Version badge
+  const vb = document.getElementById('version-badge');
+  if (vb) vb.textContent = `v${__APP_VERSION__}`;
 
-  // 2. Initialize Physics Engine wrapper
+  // 1. Initialize Physics Engine wrapper
   const simulator = new PhysicsSimulator();
   simulator.init();
 
   // 3. Initialize Canvas Renderer Module
   const renderer = new CanvasRenderer('gameCanvas');
+
+  // 3b. Fixed canonical world. Camera auto-fits this into the viewport.
+  const WORLD_W = 1600;
+  const WORLD_H = 900;
+  simulator.setupArenaBoundary(WORLD_W, WORLD_H);
+  renderer.worldWidth = WORLD_W;
+  renderer.worldHeight = WORLD_H;
+  renderer.fitArena();
+  window.addEventListener('resize', () => {
+    renderer.fitArena();
+  });
 
   // 4. Initialize User Interface Controls (triggers initial 'menu' screen)
   const ui = new UIManager(simulator, renderer);

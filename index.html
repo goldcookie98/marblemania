@@ -26,10 +26,6 @@
 
     <!-- 1. SCREEN: MAIN MENU -->
     <div id="screen-menu" class="screen-overlay">
-      <div class="menu-connection-status">
-        <span id="menu-firebase-badge" class="badge badge-offline">Offline</span>
-      </div>
-      
       <div class="poly-title-container">
         <h1 class="poly-title">Marble Mania</h1>
       </div>
@@ -226,17 +222,18 @@
               <span class="tool-icon eraser-icon"></span>
               <span class="tool-label">Eraser</span>
             </button>
-            <button id="tool-pan" class="tool-btn" data-tool="pan" title="Drag to move viewport">
-              <span class="tool-icon pan-icon"></span>
-              <span class="tool-label">Pan Mode</span>
-            </button>
           </div>
           <div class="slider-group">
             <div class="slider-header">
-              <span>Brush Size</span>
+              <span>Brush Size (Line)</span>
               <span id="brush-size-val">12px</span>
             </div>
             <input type="range" id="brush-size" min="4" max="50" value="12" step="2">
+          </div>
+          <div class="shape-row" style="display: flex; gap: 6px; margin-top: 10px;">
+            <button class="shape-btn active" data-shape="line" title="Free-form line">Line</button>
+            <button class="shape-btn" data-shape="rect" title="Drag to draw a rectangle">Rect</button>
+            <button class="shape-btn" data-shape="circle" title="Drag from center for radius">Circle</button>
           </div>
         </div>
 
@@ -271,6 +268,42 @@
       </div>
     </div>
 
+    <!-- Multiplayer Lobby Modal -->
+    <div id="mp-modal" class="modal-overlay hidden">
+      <div class="modal-content glass-panel">
+        <button id="mp-modal-close" class="modal-close-btn">&times;</button>
+        <h2>Multiplayer Lobby</h2>
+        <p class="modal-description">Race a friend on the same map. One person hosts and shares the room code, the other joins it.</p>
+
+        <div class="input-group">
+          <label for="mp-name">Your Name</label>
+          <input type="text" id="mp-name" placeholder="Player1" maxlength="16" />
+        </div>
+
+        <div class="input-group">
+          <label for="mp-room">Room Code</label>
+          <input type="text" id="mp-room" placeholder="e.g. PIZZA42" maxlength="20" />
+        </div>
+
+        <div class="modal-actions">
+          <button id="mp-btn-host" class="action-btn primary-btn">Host Room</button>
+          <button id="mp-btn-join" class="action-btn primary-btn">Join Room</button>
+        </div>
+
+        <div id="mp-status" style="margin-top: 12px; font-size: 12px; color: var(--text-muted);"></div>
+
+        <div id="mp-lobby" class="hidden" style="margin-top: 16px;">
+          <h3 style="font-size: 14px; margin-bottom: 8px;">Players in Room:</h3>
+          <ul id="mp-player-list" style="font-size: 13px; padding-left: 20px;"></ul>
+          <div class="modal-actions">
+            <button id="mp-btn-pickmap" class="action-btn secondary-btn">Pick Map</button>
+            <button id="mp-btn-start" class="action-btn primary-btn" disabled>Start Race</button>
+          </div>
+          <p style="font-size: 11px; color: var(--text-muted); margin-top: 8px;">Only the host can pick a map and start. Share the room code with friends.</p>
+        </div>
+      </div>
+    </div>
+
     <!-- 5. SCREEN: RACER SELECTION MODAL (POP AT PLAY START) -->
     <div id="screen-racer-picker" class="screen-overlay hidden">
       <div class="picker-container glass-panel">
@@ -291,51 +324,10 @@
       </div>
     </div>
 
-    <!-- Firebase Connection Settings Modal (Outer Main Menu Scope) -->
-    <div id="firebase-modal" class="modal-overlay hidden">
-      <div class="modal-content glass-panel">
-        <button id="modal-close" class="modal-close-btn">&times;</button>
-        <h2>Connect Firebase Database</h2>
-        <p class="modal-description">
-          Provide your Firebase Firestore credentials to sync maps directly to the Cloud database. Maps will be shared instantly with all players globally!
-        </p>
-        <form id="firebase-config-form">
-          <div class="input-group">
-            <label for="fb-apiKey">API Key</label>
-            <input type="text" id="fb-apiKey" required placeholder="AIzaSy...">
-          </div>
-          <div class="input-row">
-            <div class="input-group">
-              <label for="fb-authDomain">Auth Domain</label>
-              <input type="text" id="fb-authDomain" required placeholder="project-id.firebaseapp.com">
-            </div>
-            <div class="input-group">
-              <label for="fb-projectId">Project ID</label>
-              <input type="text" id="fb-projectId" required placeholder="project-id">
-            </div>
-          </div>
-          <div class="input-row">
-            <div class="input-group">
-              <label for="fb-storageBucket">Storage Bucket</label>
-              <input type="text" id="fb-storageBucket" required placeholder="project-id.appspot.com">
-            </div>
-            <div class="input-group">
-              <label for="fb-messagingSenderId">Messaging Sender ID</label>
-              <input type="text" id="fb-messagingSenderId" required placeholder="1234567890">
-            </div>
-          </div>
-          <div class="input-group">
-            <label for="fb-appId">App ID</label>
-            <input type="text" id="fb-appId" required placeholder="1:123456:web:abcd...">
-          </div>
-          <div class="modal-actions">
-            <button type="button" id="btn-fb-clear" class="action-btn danger-btn">Disconnect Cloud</button>
-            <button type="submit" class="action-btn primary-btn">Connect Cloud DB</button>
-          </div>
-        </form>
-      </div>
-    </div>
   </div>
+
+  <!-- Version Badge -->
+  <div id="version-badge"></div>
 
   <!-- Entry Script -->
   <script type="module" src="/src/main.js"></script>

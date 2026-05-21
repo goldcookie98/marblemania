@@ -2,26 +2,74 @@ export class CanvasRenderer {
   constructor(canvasId) {
     this.canvas = document.getElementById(canvasId);
     this.ctx = this.canvas.getContext('2d');
-    
+
     // Viewport transform (pan and zoom)
     this.panX = 0;
     this.panY = 0;
     this.zoom = 1.0;
-    
+
+    // Canonical world dimensions (set by main.js)
+    this.worldWidth = 1600;
+    this.worldHeight = 900;
+
     // Camera settings
     this.isTrackingLead = false;
-    this.playerRacerId = null; // Stored body ID of the user's selected racer
-    
+    this.playerRacerId = null;
+
     // Particle pool
     this.particles = [];
-    
+
     this.resize();
-    window.addEventListener('resize', () => this.resize());
+    window.addEventListener('resize', () => {
+      this.resize();
+      this.fitArena();
+    });
   }
 
   resize() {
     this.canvas.width = this.canvas.clientWidth;
     this.canvas.height = this.canvas.clientHeight;
+  }
+
+  // Auto-fit camera so the whole arena rectangle fits the viewport with margin
+  fitArena() {
+    const margin = 0.94;
+    const zx = this.canvas.width / this.worldWidth;
+    const zy = this.canvas.height / this.worldHeight;
+    this.zoom = Math.min(zx, zy) * margin;
+
+    // Pan so the world center sits at canvas center
+    const worldCenterX = this.worldWidth / 2;
+    const worldCenterY = this.worldHeight / 2;
+    this.panX = (this.canvas.width / 2 - worldCenterX) - (worldCenterX - this.canvas.width / 2) * (this.zoom - 1);
+    this.panY = (this.canvas.height / 2 - worldCenterY) - (worldCenterY - this.canvas.height / 2) * (this.zoom - 1);
+  }
+
+  // Clamp pan so the arena rectangle stays visible (some overscan allowed)
+  clampPan() {
+    const wW = this.worldWidth * this.zoom;
+    const wH = this.worldHeight * this.zoom;
+    const cw = this.canvas.width;
+    const ch = this.canvas.height;
+    const overscan = 0.4;
+
+    // Convert: world rect's screen-position at world origin
+    const baseScreenX = this.canvas.width / 2 * (1 - this.zoom) + this.panX;
+    const baseScreenY = this.canvas.height / 2 * (1 - this.zoom) + this.panY;
+
+    const rectLeft = baseScreenX;
+    const rectTop = baseScreenY;
+    const rectRight = rectLeft + wW;
+    const rectBottom = rectTop + wH;
+
+    let dx = 0, dy = 0;
+    if (rectRight < cw * overscan) dx = cw * overscan - rectRight;
+    if (rectLeft > cw * (1 - overscan)) dx = cw * (1 - overscan) - rectLeft;
+    if (rectBottom < ch * overscan) dy = ch * overscan - rectBottom;
+    if (rectTop > ch * (1 - overscan)) dy = ch * (1 - overscan) - rectTop;
+
+    this.panX += dx;
+    this.panY += dy;
   }
 
   screenToWorld(screenX, screenY) {
@@ -149,16 +197,26 @@ export class CanvasRenderer {
     
     // 2. Draw walls, goals, and hazards
     this.drawStaticElements(simulator.staticElements);
-    
+
     // 3. Draw active drawing path
     if (activeDrawing) {
       this.drawActivePath(activeDrawing);
     }
-    
-    // 4. Draw marbles, trails, and custom selected arrow
+
+    // 4. Draw spawn gate ring (animates color rotation, opens after 3s)
+    if (simulator.spawnGate) {
+      this.drawSpawnGate(simulator.spawnGate);
+    }
+
+    // 5. Draw marbles, trails, and custom selected arrow
     this.drawMarbles(simulator.marbles);
-    
-    // 5. Draw explosions
+
+    // 5b. Draw remote players' marbles with name arrows
+    if (simulator.remoteMarbles && simulator.remoteMarbles.size > 0) {
+      this.drawRemoteMarbles(simulator.remoteMarbles);
+    }
+
+    // 6. Draw explosions
     this.drawParticles();
     
     ctx.restore();
@@ -196,13 +254,21 @@ export class CanvasRenderer {
 
   drawStaticElements(elements) {
     const { ctx } = this;
-    
+
     elements.forEach((el) => {
       if (el.type === 'spawner') {
         this.drawSpawner(el);
         return;
       }
-      
+      if (el.type === 'arena_boundary') {
+        this.drawArenaBoundary(el);
+        return;
+      }
+      if (el.type === 'shape') {
+        this.drawShape(el);
+        return;
+      }
+
       const { points, thickness } = el;
       if (points.length < 2) return;
       
@@ -244,6 +310,133 @@ export class CanvasRenderer {
     });
   }
 
+  drawSpawnGate(gate) {
+    const { ctx } = this;
+    const { x, y, radius, createdAt, isOpen } = gate;
+
+    ctx.save();
+    ctx.translate(x, y);
+
+    // Spinning ring composed of segmented arcs (rainbow + black band)
+    const elapsed = Date.now() - createdAt;
+    const rot = (elapsed / 1000) * (isOpen ? 0.6 : 1.6);
+
+    const segments = 28;
+    const innerR = radius - 7;
+    const outerR = radius + 7;
+
+    const palette = ['#ff3b30', '#ff9500', '#ffcc00', '#34c759', '#5ac8fa', '#007aff', '#af52de', '#ff2d92'];
+
+    for (let i = 0; i < segments; i++) {
+      const a1 = (i / segments) * Math.PI * 2 + rot;
+      const a2 = ((i + 1) / segments) * Math.PI * 2 + rot;
+
+      // Skip a slice for the open gap (bottom)
+      if (isOpen) {
+        const mid = (a1 + a2) / 2;
+        const wrapped = ((mid % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+        if (Math.abs(wrapped - Math.PI / 2) < (Math.PI * 2 / segments) * 2.2) continue;
+      }
+
+      ctx.fillStyle = palette[i % palette.length];
+      ctx.beginPath();
+      ctx.arc(0, 0, outerR, a1, a2);
+      ctx.arc(0, 0, innerR, a2, a1, true);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    // Outer + inner black borders
+    ctx.strokeStyle = '#000';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(0, 0, outerR + 2, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(0, 0, innerR - 2, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Countdown text while closed
+    if (!isOpen && gate.opensAt) {
+      const remain = Math.max(0, Math.ceil((gate.opensAt - Date.now()) / 1000));
+      if (remain > 0) {
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 22px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.lineWidth = 4;
+        ctx.strokeStyle = '#000';
+        ctx.strokeText(remain, 0, -radius - 22);
+        ctx.fillText(remain, 0, -radius - 22);
+      }
+    }
+
+    ctx.restore();
+  }
+
+  drawArenaBoundary(el) {
+    const { ctx } = this;
+    ctx.save();
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = '#000000';
+    ctx.strokeRect(el.x, el.y, el.width, el.height);
+    ctx.restore();
+  }
+
+  drawShape(el) {
+    const { ctx } = this;
+    const { category, shape, geom } = el;
+
+    let fill = 'rgba(0,0,0,0.85)';
+    let stroke = '#000000';
+    let dash = null;
+
+    if (category === 'goal') {
+      fill = 'rgba(57, 255, 20, 0.55)';
+      stroke = '#39ff14';
+      dash = [6, 8];
+    } else if (category === 'hazard') {
+      fill = 'rgba(255, 51, 102, 0.55)';
+      stroke = '#ff3366';
+      dash = [4, 6];
+    }
+
+    ctx.save();
+    ctx.fillStyle = fill;
+    ctx.strokeStyle = stroke;
+    ctx.lineWidth = 3;
+
+    if (shape === 'rect') {
+      const x = Math.min(geom.x, geom.x + geom.w);
+      const y = Math.min(geom.y, geom.y + geom.h);
+      const w = Math.abs(geom.w);
+      const h = Math.abs(geom.h);
+      ctx.fillRect(x, y, w, h);
+      ctx.strokeRect(x, y, w, h);
+      if (dash) {
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 2;
+        ctx.setLineDash(dash);
+        ctx.strokeRect(x, y, w, h);
+      }
+    } else if (shape === 'circle') {
+      ctx.beginPath();
+      ctx.arc(geom.cx, geom.cy, geom.r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      if (dash) {
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 2;
+        ctx.setLineDash(dash);
+        ctx.beginPath();
+        ctx.arc(geom.cx, geom.cy, geom.r, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+    }
+    ctx.restore();
+  }
+
   drawSpawner(spawner) {
     const { ctx } = this;
     const r = spawner.radius || 15;
@@ -279,31 +472,61 @@ export class CanvasRenderer {
 
   drawActivePath(activeDrawing) {
     const { ctx } = this;
-    const { points, tool, thickness } = activeDrawing;
-    if (points.length < 2) return;
-    
-    ctx.save();
-    ctx.beginPath();
-    ctx.moveTo(points[0].x, points[0].y);
-    for (let i = 1; i < points.length; i++) {
-      ctx.lineTo(points[i].x, points[i].y);
-    }
-    
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    ctx.lineWidth = thickness;
-    
-    if (tool === 'wall') {
-      ctx.strokeStyle = 'rgba(0, 0, 0, 0.5)';
-    } else if (tool === 'goal') {
-      ctx.strokeStyle = 'rgba(57, 255, 20, 0.5)';
+    const { tool, shape, thickness } = activeDrawing;
+
+    let strokeStyle = 'rgba(0, 0, 0, 0.5)';
+    let fillStyle = 'rgba(0, 0, 0, 0.25)';
+    if (tool === 'goal') {
+      strokeStyle = 'rgba(57, 255, 20, 0.6)';
+      fillStyle = 'rgba(57, 255, 20, 0.25)';
     } else if (tool === 'hazard') {
-      ctx.strokeStyle = 'rgba(255, 51, 102, 0.5)';
+      strokeStyle = 'rgba(255, 51, 102, 0.6)';
+      fillStyle = 'rgba(255, 51, 102, 0.25)';
     } else if (tool === 'eraser') {
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+      strokeStyle = 'rgba(255, 255, 255, 0.4)';
+      fillStyle = 'transparent';
     }
-    
-    ctx.stroke();
+
+    ctx.save();
+
+    if (shape === 'rect') {
+      const { start, end } = activeDrawing;
+      if (!start || !end) { ctx.restore(); return; }
+      const x = Math.min(start.x, end.x);
+      const y = Math.min(start.y, end.y);
+      const w = Math.abs(end.x - start.x);
+      const h = Math.abs(end.y - start.y);
+      ctx.fillStyle = fillStyle;
+      ctx.strokeStyle = strokeStyle;
+      ctx.lineWidth = 2;
+      ctx.fillRect(x, y, w, h);
+      ctx.strokeRect(x, y, w, h);
+    } else if (shape === 'circle') {
+      const { start, end } = activeDrawing;
+      if (!start || !end) { ctx.restore(); return; }
+      const r = Math.hypot(end.x - start.x, end.y - start.y);
+      ctx.fillStyle = fillStyle;
+      ctx.strokeStyle = strokeStyle;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(start.x, start.y, r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    } else {
+      const { points } = activeDrawing;
+      if (!points || points.length < 2) { ctx.restore(); return; }
+      ctx.beginPath();
+      ctx.moveTo(points[0].x, points[0].y);
+      for (let i = 1; i < points.length; i++) {
+        ctx.lineTo(points[i].x, points[i].y);
+      }
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.lineWidth = thickness;
+      ctx.strokeStyle = strokeStyle;
+      ctx.stroke();
+    }
+
     ctx.restore();
   }
 
@@ -311,20 +534,26 @@ export class CanvasRenderer {
     const { ctx } = this;
     
     marbles.forEach((m) => {
-      // 1. Thin colorful vector trail matching Algodoo screenshots
-      if (m.trail && m.trail.length > 1) {
+      // 1. Smooth tapered trail using quadratic curve + per-segment fade
+      if (m.trail && m.trail.length > 2) {
         ctx.save();
-        ctx.beginPath();
-        ctx.moveTo(m.trail[0].x, m.trail[0].y);
-        for (let i = 1; i < m.trail.length; i++) {
-          ctx.lineTo(m.trail[i].x, m.trail[i].y);
-        }
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
-        ctx.lineWidth = 3.5;
-        ctx.strokeStyle = m.marbleColor || '#fff';
-        ctx.globalAlpha = 0.6;
-        ctx.stroke();
+        const baseColor = m.marbleColor || '#fff';
+        const total = m.trail.length;
+        for (let i = 1; i < total - 1; i++) {
+          const p0 = m.trail[i - 1];
+          const p1 = m.trail[i];
+          const p2 = m.trail[i + 1];
+          const t = i / total;
+          ctx.globalAlpha = t * 0.75;
+          ctx.lineWidth = 1.5 + t * 4.5;
+          ctx.strokeStyle = baseColor;
+          ctx.beginPath();
+          ctx.moveTo((p0.x + p1.x) / 2, (p0.y + p1.y) / 2);
+          ctx.quadraticCurveTo(p1.x, p1.y, (p1.x + p2.x) / 2, (p1.y + p2.y) / 2);
+          ctx.stroke();
+        }
         ctx.restore();
       }
       
@@ -430,16 +659,16 @@ export class CanvasRenderer {
       if (m.id === this.playerRacerId || m.isPlayer) {
         ctx.save();
         ctx.translate(m.position.x, m.position.y);
-        
+
         const bounce = Math.sin(Date.now() / 150) * 5;
         const arrowY = -m.circleRadius - 20 + bounce;
-        
+
         ctx.fillStyle = '#ff0000';
         ctx.strokeStyle = '#ffffff';
         ctx.lineWidth = 1.5;
-        
+
         ctx.beginPath();
-        ctx.moveTo(0, arrowY); // Tip
+        ctx.moveTo(0, arrowY);
         ctx.lineTo(-8, arrowY - 10);
         ctx.lineTo(-3, arrowY - 10);
         ctx.lineTo(-3, arrowY - 18);
@@ -447,9 +676,20 @@ export class CanvasRenderer {
         ctx.lineTo(3, arrowY - 10);
         ctx.lineTo(8, arrowY - 10);
         ctx.closePath();
-        
+
         ctx.fill();
         ctx.stroke();
+
+        // "YOU" or local player name above arrow
+        const nameText = this.localPlayerName || 'YOU';
+        ctx.font = 'bold 10px sans-serif';
+        ctx.textAlign = 'center';
+        const textWidth = ctx.measureText(nameText).width;
+        ctx.fillStyle = 'rgba(255, 0, 0, 0.95)';
+        ctx.fillRect(-textWidth / 2 - 5, arrowY - 34, textWidth + 10, 14);
+        ctx.fillStyle = '#fff';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(nameText, 0, arrowY - 27);
         ctx.restore();
       }
 
@@ -474,6 +714,80 @@ export class CanvasRenderer {
         ctx.fillText(nameText, 0, -m.circleRadius - 5);
         ctx.restore();
       }
+    });
+  }
+
+  drawRemoteMarbles(remoteMap) {
+    const { ctx } = this;
+    const radius = 10;
+
+    remoteMap.forEach((r) => {
+      // Trail
+      if (r.trail && r.trail.length > 2) {
+        ctx.save();
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        const total = r.trail.length;
+        for (let i = 1; i < total - 1; i++) {
+          const p0 = r.trail[i - 1];
+          const p1 = r.trail[i];
+          const p2 = r.trail[i + 1];
+          const t = i / total;
+          ctx.globalAlpha = t * 0.65;
+          ctx.lineWidth = 1.5 + t * 4.5;
+          ctx.strokeStyle = r.color || '#fff';
+          ctx.beginPath();
+          ctx.moveTo((p0.x + p1.x) / 2, (p0.y + p1.y) / 2);
+          ctx.quadraticCurveTo(p1.x, p1.y, (p1.x + p2.x) / 2, (p1.y + p2.y) / 2);
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
+
+      // Body
+      ctx.save();
+      ctx.translate(r.x, r.y);
+      ctx.fillStyle = r.color || '#888';
+      ctx.beginPath();
+      ctx.arc(0, 0, radius, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#000';
+      ctx.lineWidth = 1.8;
+      ctx.stroke();
+      ctx.restore();
+
+      // Bouncing arrow + player name (blue for opponents)
+      ctx.save();
+      ctx.translate(r.x, r.y);
+      const bounce = Math.sin(Date.now() / 150 + (r.id ? r.id.charCodeAt(0) : 0)) * 5;
+      const arrowY = -radius - 20 + bounce;
+
+      ctx.fillStyle = '#2196f3';
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(0, arrowY);
+      ctx.lineTo(-8, arrowY - 10);
+      ctx.lineTo(-3, arrowY - 10);
+      ctx.lineTo(-3, arrowY - 18);
+      ctx.lineTo(3, arrowY - 18);
+      ctx.lineTo(3, arrowY - 10);
+      ctx.lineTo(8, arrowY - 10);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      // Name label
+      const nameText = r.name || 'Player';
+      ctx.font = 'bold 10px sans-serif';
+      ctx.textAlign = 'center';
+      const textWidth = ctx.measureText(nameText).width;
+      ctx.fillStyle = 'rgba(33, 150, 243, 0.95)';
+      ctx.fillRect(-textWidth / 2 - 5, arrowY - 34, textWidth + 10, 14);
+      ctx.fillStyle = '#fff';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(nameText, 0, arrowY - 27);
+      ctx.restore();
     });
   }
 

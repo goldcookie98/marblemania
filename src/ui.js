@@ -1,11 +1,8 @@
-import { 
-  initFirebase, 
-  isFirebaseConnected, 
-  clearFirebaseConfig, 
-  saveMap, 
-  fetchAllMaps, 
-  likeMap 
+import {
+  saveMap,
+  fetchAllMaps
 } from './firebase-db';
+import { MultiplayerClient } from './multiplayer';
 
 // The 78 custom marbles list from reference sheet
 export const CUSTOM_MARBLES = [
@@ -67,6 +64,7 @@ export const CUSTOM_MARBLES = [
   { name: 'Pink', color: '#F48FB1', effect: 'solid' },
   { name: 'Platinum', color: '#CFD8DC', effect: 'solid' },
   { name: 'Purple', color: '#800080', effect: 'solid' },
+  { name: 'Red', color: '#E53935', effect: 'solid' },
   { name: 'Royal Blue', color: '#2962FF', effect: 'solid' },
   { name: 'Royal Purple', color: '#6200EA', effect: 'solid' },
   { name: 'Salmon', color: '#FF8A80', effect: 'solid' },
@@ -107,11 +105,12 @@ export class UIManager {
     this.currentScreen = 'menu';
     
     // Selected Player racer configs
-    this.selectedRacer = CUSTOM_MARBLES[1]; // Default to 'Aqua'
+    this.selectedRacer = CUSTOM_MARBLES.find(m => m.name === 'Red') || CUSTOM_MARBLES[0];
     this.autoTrackRacer = true;
 
     // Editor State variables
-    this.currentTool = 'wall'; 
+    this.currentTool = 'wall';
+    this.currentShape = 'line';
     this.brushSize = 12;
     this.activeDrawingPath = null;
     this.isDrawing = false;
@@ -120,7 +119,6 @@ export class UIManager {
     this.canvas = renderer.canvas;
     
     this.initEventListeners();
-    this.updateCloudStatus();
     this.refreshMapsList();
     this.buildRacerPickerList();
     
@@ -165,18 +163,17 @@ export class UIManager {
     this.isDrawing = false;
     this.isPanning = false;
     
+    // Auto-fit camera to canonical arena on every screen change
+    this.renderer.isTrackingLead = false;
+    this.renderer.fitArena();
+    this.simulator.menuMode = (screenName === 'menu' || screenName === 'browser');
+
     // 4. Configure physics & rendering state depending on target screen
     if (screenName === 'menu') {
-      this.renderer.isTrackingLead = false;
-      this.renderer.zoom = 1.0;
-      this.renderer.panX = 0;
-      this.renderer.panY = 0;
-      
       // Load sample-pachinko in background and spawn automated background marbles
       this.loadBackgroundDemo();
     } else if (screenName === 'browser') {
       // Keep menu physics running softly behind list
-      this.renderer.isTrackingLead = false;
     } else if (screenName === 'editor') {
       // Sandbox: clear marbles and pause physics so drawing is static
       this.simulator.isPaused = true;
@@ -187,14 +184,13 @@ export class UIManager {
       this.renderer.playerRacerId = null;
       
       // Load empty custom layout or preserve drawings
-      if (this.simulator.staticElements.filter(e => e.type !== 'spawner').length === 0) {
+      if (this.simulator.staticElements.filter(e => e.type !== 'spawner' && e.type !== 'arena_boundary').length === 0) {
         this.simulator.clearAll();
       }
     } else if (screenName === 'arena') {
       // Ready to race
       this.simulator.isPaused = true;
-      this.renderer.isTrackingLead = this.autoTrackRacer; 
-      
+
       // Reset play button state
       const playBtn = document.getElementById('btn-play');
       playBtn.innerHTML = '<span class="play-icon"></span> Play Race';
@@ -205,36 +201,65 @@ export class UIManager {
     }
   }
 
+  // Build a procedurally centered menu backdrop sized to the canonical arena
+  buildMenuBackgroundMap() {
+    const w = this.renderer.worldWidth;
+    const h = this.renderer.worldHeight;
+    const cx = w / 2;
+
+    const elements = [
+      { type: 'spawner', x: cx, y: 70, radius: 18 },
+      // Funnel slants near top
+      { type: 'wall', points: [{ x: cx - 220, y: 180 }, { x: cx - 60, y: 260 }], thickness: 12 },
+      { type: 'wall', points: [{ x: cx + 220, y: 180 }, { x: cx + 60, y: 260 }], thickness: 12 },
+      // Three rows of pegs around vertical center
+      ...[0, 1, 2].flatMap((row) => {
+        const y = h * 0.42 + row * 70;
+        const xs = row % 2 === 0
+          ? [cx - 180, cx - 60, cx + 60, cx + 180]
+          : [cx - 240, cx - 120, cx, cx + 120, cx + 240];
+        return xs.map((x) => ({
+          type: 'shape', category: 'wall', shape: 'circle', geom: { cx: x, cy: y, r: 10 }
+        }));
+      }),
+      // Bottom funnels into goal
+      { type: 'wall', points: [{ x: cx - 320, y: h - 200 }, { x: cx - 80, y: h - 120 }], thickness: 12 },
+      { type: 'wall', points: [{ x: cx + 320, y: h - 200 }, { x: cx + 80, y: h - 120 }], thickness: 12 },
+      // Goal strip centered
+      { type: 'shape', category: 'goal', shape: 'rect', geom: { x: cx - 80, y: h - 80, w: 160, h: 30 } },
+      // Side hazards at very bottom edges
+      { type: 'shape', category: 'hazard', shape: 'rect', geom: { x: 0, y: h - 40, w: cx - 80, h: 40 } },
+      { type: 'shape', category: 'hazard', shape: 'rect', geom: { x: cx + 80, y: h - 40, w: w - (cx + 80), h: 40 } }
+    ];
+
+    return { elements };
+  }
+
   // Spawns low count marbles to create animated backdrop in main menu
   async loadBackgroundDemo() {
     this.simulator.isPaused = false;
     this.simulator.physicsSpeed = 1.0;
-    this.renderer.playerRacerId = null; // Clear arrow highlights in main menu
-    
-    // Fetch and load Pachinko track silently
-    const maps = await fetchAllMaps();
-    const pachinko = maps.find(m => m.id === 'sample-pachinko');
-    if (pachinko) {
-      this.simulator.loadMap(pachinko);
-      
-      // Just pick random solids for menu backdrop
-      const menuPreset = CUSTOM_MARBLES.filter(m => m.effect === 'solid').slice(0, 15);
-      this.simulator.spawnMarbles(15, menuPreset);
-      
-      // Periodically loop them automatically in menu screen
-      if (this.bgCheckInterval) clearInterval(this.bgCheckInterval);
-      this.bgCheckInterval = setInterval(() => {
-        if (this.currentScreen !== 'menu' && this.currentScreen !== 'browser') {
-          clearInterval(this.bgCheckInterval);
-          return;
-        }
-        
-        const activeCount = this.simulator.marbles.filter(m => !m.finished).length;
-        if (activeCount === 0 || this.simulator.finishedMarbles.length >= 10) {
-          this.simulator.spawnMarbles(15, menuPreset);
-        }
-      }, 5000);
-    }
+    this.renderer.playerRacerId = null;
+    this.simulator.menuMode = true;
+
+    this.simulator.loadMap(this.buildMenuBackgroundMap());
+
+    const menuPreset = CUSTOM_MARBLES.filter(m => m.effect === 'solid').slice(0, 15);
+    this.simulator.spawnMarbles(15, menuPreset);
+
+    if (this.bgCheckInterval) clearInterval(this.bgCheckInterval);
+    this.bgCheckInterval = setInterval(() => {
+      if (this.currentScreen !== 'menu' && this.currentScreen !== 'browser') {
+        clearInterval(this.bgCheckInterval);
+        this.simulator.menuMode = false;
+        return;
+      }
+
+      const activeCount = this.simulator.marbles.filter(m => !m.finished).length;
+      if (activeCount === 0 || this.simulator.finishedMarbles.length >= 10) {
+        this.simulator.spawnMarbles(15, menuPreset);
+      }
+    }, 5000);
   }
 
   // Generate CSS backgrounds for the 78 marble cards
@@ -268,36 +293,46 @@ export class UIManager {
     gridEl.innerHTML = '';
     
     CUSTOM_MARBLES.forEach((marble) => {
+      const isUnlocked = (marble.name === 'Red') || !!this.mp;
       const card = document.createElement('button');
-      card.className = 'racer-card';
+      card.className = isUnlocked ? 'racer-card' : 'racer-card locked';
       card.type = 'button';
-      card.title = `Select ${marble.name}`;
-      
+      card.title = isUnlocked ? `Select ${marble.name}` : `${marble.name} (Locked)`;
+      if (!isUnlocked) {
+        card.style.opacity = '0.35';
+        card.style.filter = 'grayscale(0.85)';
+        card.style.cursor = 'not-allowed';
+      }
+
       const circle = document.createElement('div');
       circle.className = 'racer-circle';
       circle.style.background = this.getCssBackground(marble);
       if (marble.effect === 'blurred') {
         circle.style.filter = 'blur(2px)';
       }
-      
+
       const label = document.createElement('span');
       label.className = 'racer-name-label';
-      label.textContent = marble.name;
-      
+      label.textContent = isUnlocked ? marble.name : `🔒 ${marble.name}`;
+
       card.appendChild(circle);
       card.appendChild(label);
-      
+
       card.addEventListener('click', () => {
+        if (!isUnlocked) {
+          this.showToast(`${marble.name} is locked. Only Red is available right now.`);
+          return;
+        }
         this.selectedRacer = marble;
         document.getElementById('screen-racer-picker').classList.add('hidden');
-        if (this.currentScreen === 'menu' || this.currentScreen === 'browser') {
+        if (this.currentScreen === 'menu') {
           this.updateRacerHudDisplay();
         } else {
           this.changeScreen('arena');
         }
         this.showToast(`Selected Ball: ${marble.name}`);
       });
-      
+
       gridEl.appendChild(card);
     });
   }
@@ -373,21 +408,49 @@ export class UIManager {
     });
     
     document.getElementById('menu-btn-cloud').addEventListener('click', () => {
-      const localConfig = localStorage.getItem('fb_config');
-      if (localConfig) {
-        const config = JSON.parse(localConfig);
-        document.getElementById('fb-apiKey').value = config.apiKey || '';
-        document.getElementById('fb-authDomain').value = config.authDomain || '';
-        document.getElementById('fb-projectId').value = config.projectId || '';
-        document.getElementById('fb-storageBucket').value = config.storageBucket || '';
-        document.getElementById('fb-messagingSenderId').value = config.messagingSenderId || '';
-        document.getElementById('fb-appId').value = config.appId || '';
-      }
-      document.getElementById('firebase-modal').classList.remove('hidden');
+      this.showToast("Settings menu coming soon.");
     });
 
     document.getElementById('menu-btn-multiplayer').addEventListener('click', () => {
-      this.showToast("Multiplayer is coming in Season 4! Peer-to-peer matchmaking is currently in development.");
+      document.getElementById('mp-modal').classList.remove('hidden');
+      const stored = localStorage.getItem('mp_name') || '';
+      document.getElementById('mp-name').value = stored;
+    });
+
+    document.getElementById('mp-modal-close').addEventListener('click', () => {
+      document.getElementById('mp-modal').classList.add('hidden');
+    });
+
+    document.getElementById('mp-btn-host').addEventListener('click', () => {
+      const name = document.getElementById('mp-name').value.trim() || 'Host';
+      let room = document.getElementById('mp-room').value.trim().toUpperCase();
+      if (!room) {
+        room = Math.random().toString(36).slice(2, 8).toUpperCase();
+        document.getElementById('mp-room').value = room;
+      }
+      this.connectMultiplayer(name, room);
+    });
+
+    document.getElementById('mp-btn-join').addEventListener('click', () => {
+      const name = document.getElementById('mp-name').value.trim() || 'Player';
+      const room = document.getElementById('mp-room').value.trim().toUpperCase();
+      if (!room) {
+        document.getElementById('mp-status').textContent = 'Enter a room code to join.';
+        return;
+      }
+      this.connectMultiplayer(name, room);
+    });
+
+    document.getElementById('mp-btn-pickmap').addEventListener('click', () => {
+      this.mpPickingMap = true;
+      document.getElementById('mp-modal').classList.add('hidden');
+      this.changeScreen('browser');
+    });
+
+    document.getElementById('mp-btn-start').addEventListener('click', () => {
+      if (this.mp && this.mp.isHost) {
+        this.mp.startRace();
+      }
     });
 
     // --- Screen: Play Browser Navigation ---
@@ -464,6 +527,16 @@ export class UIManager {
       });
     });
 
+    // --- Editor Shape selection (line / rect / circle) ---
+    const shapeButtons = document.querySelectorAll('.shape-btn');
+    shapeButtons.forEach((btn) => {
+      btn.addEventListener('click', () => {
+        shapeButtons.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        this.currentShape = btn.dataset.shape;
+      });
+    });
+
     const brushSlider = document.getElementById('brush-size');
     const brushSizeVal = document.getElementById('brush-size-val');
     brushSlider.addEventListener('input', (e) => {
@@ -494,9 +567,13 @@ export class UIManager {
       } else {
         playBtn.innerHTML = '<span class="play-icon"></span> Pause';
         playBtn.classList.remove('pulse-border');
-        
+
         if (this.simulator.marbles.length === 0) {
           this.triggerSpawn();
+        }
+        // Reset gate countdown to start at unpause moment
+        if (this.simulator.spawnGate && !this.simulator.spawnGate.isOpen) {
+          this.simulator.scheduleGateOpen(3000);
         }
       }
     });
@@ -526,62 +603,25 @@ export class UIManager {
       speedVal.textContent = `${val}x`;
     });
 
-    // --- Firebase configuration modal ---
-    const fbModal = document.getElementById('firebase-modal');
-    document.getElementById('modal-close').addEventListener('click', () => {
-      fbModal.classList.add('hidden');
-    });
-
-    document.getElementById('firebase-config-form').addEventListener('submit', (e) => {
-      e.preventDefault();
-      const config = {
-        apiKey: document.getElementById('fb-apiKey').value.trim(),
-        authDomain: document.getElementById('fb-authDomain').value.trim(),
-        projectId: document.getElementById('fb-projectId').value.trim(),
-        storageBucket: document.getElementById('fb-storageBucket').value.trim(),
-        messagingSenderId: document.getElementById('fb-messagingSenderId').value.trim(),
-        appId: document.getElementById('fb-appId').value.trim()
-      };
-
-      try {
-        initFirebase(config);
-        this.updateCloudStatus();
-        this.refreshMapsList();
-        fbModal.classList.add('hidden');
-        this.showToast("Database linked successfully!");
-      } catch (error) {
-        alert("Failed to link Firebase config: " + error.message);
-      }
-    });
-
-    document.getElementById('btn-fb-clear').addEventListener('click', () => {
-      if (confirm("Clear Firebase configuration? Local storage will be activated instead.")) {
-        clearFirebaseConfig();
-        this.updateCloudStatus();
-        this.refreshMapsList();
-        document.getElementById('firebase-config-form').reset();
-        fbModal.classList.add('hidden');
-        this.showToast("Config cleared.");
-      }
-    });
   }
 
   // Trigger Spawning of Marbles
   triggerSpawn() {
-    const opponentCount = parseInt(document.getElementById('marble-count').value);
-    
-    // Choose random unique opponents from the custom list
-    const filteredList = CUSTOM_MARBLES.filter(m => m.name !== this.selectedRacer.name);
-    
-    // Shuffle and slice opponents
-    const shuffled = [...filteredList].sort(() => 0.5 - Math.random());
-    const selectedOpponents = shuffled.slice(0, opponentCount);
-    
-    // Put user racer at index 0 (with isPlayer tag)
-    const racerConfigs = [
-      { ...this.selectedRacer, isPlayer: true }
-    ].concat(selectedOpponents.map(o => ({ ...o, isPlayer: false })));
-    
+    let racerConfigs;
+
+    if (this.mp) {
+      // Multiplayer: only spawn the local player's marble; opponents are remote
+      racerConfigs = [{ ...this.selectedRacer, isPlayer: true }];
+    } else {
+      const opponentCount = parseInt(document.getElementById('marble-count').value);
+      const filteredList = CUSTOM_MARBLES.filter(m => m.name !== this.selectedRacer.name);
+      const shuffled = [...filteredList].sort(() => 0.5 - Math.random());
+      const selectedOpponents = shuffled.slice(0, opponentCount);
+      racerConfigs = [
+        { ...this.selectedRacer, isPlayer: true }
+      ].concat(selectedOpponents.map(o => ({ ...o, isPlayer: false })));
+    }
+
     this.simulator.spawnMarbles(racerConfigs.length, racerConfigs);
     
     // Link player body ID back to renderer for arrow highlighting and camera track
@@ -604,42 +644,55 @@ export class UIManager {
 
   handleMouseDown(e) {
     if (this.currentScreen === 'menu' || this.currentScreen === 'browser' || !document.getElementById('screen-racer-picker').classList.contains('hidden')) return;
-    
+
     const mousePos = this.getMousePosition(e);
-    
-    if (e.button === 2 || this.currentTool === 'pan' || this.currentScreen === 'arena') {
+
+    // Right-click (or middle) anywhere on canvas → pan camera
+    if (e.button === 2 || e.button === 1) {
       this.isPanning = true;
       this.lastPanMouseX = e.clientX;
       this.lastPanMouseY = e.clientY;
-      this.renderer.isTrackingLead = false; 
-      
-      if (this.currentScreen === 'arena') {
-        this.autoTrackRacer = false;
-        document.getElementById('chk-track-racer').checked = false;
-        
-        const ind = document.getElementById('camera-track-indicator');
-        ind.textContent = '🎥 Free Camera';
-        ind.style.opacity = '0.6';
-      }
+      return;
+    }
+
+    // In arena: left-drag also pans (no drawing in arena)
+    if (this.currentScreen === 'arena' && e.button === 0) {
+      this.isPanning = true;
+      this.lastPanMouseX = e.clientX;
+      this.lastPanMouseY = e.clientY;
       return;
     }
 
     if (e.button === 0 && this.currentScreen === 'editor') {
       const worldPos = this.renderer.screenToWorld(mousePos.x, mousePos.y);
-      
+
       if (this.currentTool === 'spawner') {
         this.simulator.setSpawner(worldPos.x, worldPos.y);
         this.showToast("Spawner repositioned");
         return;
       }
-      
+
       this.isDrawing = true;
-      this.activeDrawingPath = {
-        tool: this.currentTool,
-        thickness: this.brushSize,
-        points: [worldPos]
-      };
-      
+      const isShapeTool = ['wall', 'goal', 'hazard'].includes(this.currentTool)
+        && (this.currentShape === 'rect' || this.currentShape === 'circle');
+
+      if (isShapeTool) {
+        this.activeDrawingPath = {
+          tool: this.currentTool,
+          shape: this.currentShape,
+          thickness: this.brushSize,
+          start: worldPos,
+          end: worldPos
+        };
+      } else {
+        this.activeDrawingPath = {
+          tool: this.currentTool,
+          shape: 'line',
+          thickness: this.brushSize,
+          points: [worldPos]
+        };
+      }
+
       if (this.currentTool === 'eraser') {
         this.eraseAtPosition(worldPos);
       }
@@ -648,10 +701,10 @@ export class UIManager {
 
   handleMouseMove(e) {
     if (this.currentScreen === 'menu' || this.currentScreen === 'browser') return;
-    
+
     const mousePos = this.getMousePosition(e);
     const worldPos = this.renderer.screenToWorld(mousePos.x, mousePos.y);
-    
+
     if (this.isPanning) {
       const dx = e.clientX - this.lastPanMouseX;
       const dy = e.clientY - this.lastPanMouseY;
@@ -659,14 +712,21 @@ export class UIManager {
       this.renderer.panY += dy;
       this.lastPanMouseX = e.clientX;
       this.lastPanMouseY = e.clientY;
+      this.renderer.clampPan();
       return;
     }
 
     if (this.isDrawing && this.activeDrawingPath) {
-      const points = this.activeDrawingPath.points;
+      const path = this.activeDrawingPath;
+      if (path.shape === 'rect' || path.shape === 'circle') {
+        path.end = worldPos;
+        return;
+      }
+
+      const points = path.points;
       const lastPoint = points[points.length - 1];
       const dist = Math.hypot(worldPos.x - lastPoint.x, worldPos.y - lastPoint.y);
-      
+
       if (this.currentTool === 'eraser') {
         this.eraseAtPosition(worldPos);
         points.push(worldPos);
@@ -678,11 +738,32 @@ export class UIManager {
 
   handleMouseUp() {
     this.isPanning = false;
-    
+
     if (this.isDrawing && this.activeDrawingPath) {
-      const { tool, points, thickness } = this.activeDrawingPath;
-      
-      if (points.length >= 2) {
+      const path = this.activeDrawingPath;
+
+      if (path.shape === 'rect' && path.start && path.end) {
+        const w = path.end.x - path.start.x;
+        const h = path.end.y - path.start.y;
+        if (Math.abs(w) >= 4 && Math.abs(h) >= 4) {
+          this.simulator.addShape(path.tool, 'rect', {
+            x: path.start.x,
+            y: path.start.y,
+            w,
+            h
+          });
+        }
+      } else if (path.shape === 'circle' && path.start && path.end) {
+        const r = Math.hypot(path.end.x - path.start.x, path.end.y - path.start.y);
+        if (r >= 4) {
+          this.simulator.addShape(path.tool, 'circle', {
+            cx: path.start.x,
+            cy: path.start.y,
+            r
+          });
+        }
+      } else if (path.points && path.points.length >= 2) {
+        const { tool, points, thickness } = path;
         if (tool === 'wall') {
           this.simulator.addWall(points, thickness);
         } else if (tool === 'goal') {
@@ -691,7 +772,7 @@ export class UIManager {
           this.simulator.addHazard(points, thickness + 8);
         }
       }
-      
+
       this.activeDrawingPath = null;
       this.isDrawing = false;
     }
@@ -746,42 +827,62 @@ export class UIManager {
   handleWheel(e) {
     if (this.currentScreen === 'menu' || this.currentScreen === 'browser') return;
     e.preventDefault();
-    const zoomFactor = e.deltaY < 0 ? 1.08 : 0.92;
+
+    const factor = e.deltaY < 0 ? 1.1 : 1 / 1.1;
     const mousePos = this.getMousePosition(e);
-    const mouseWorld = this.renderer.screenToWorld(mousePos.x, mousePos.y);
-    
+    const worldBefore = this.renderer.screenToWorld(mousePos.x, mousePos.y);
+
     const oldZoom = this.renderer.zoom;
-    this.renderer.zoom = Math.min(Math.max(this.renderer.zoom * zoomFactor, 0.2), 3.5);
-    
-    const zoomDiff = this.renderer.zoom - oldZoom;
-    this.renderer.panX -= (mouseWorld.x - this.canvas.width / 2) * zoomDiff;
-    this.renderer.panY -= (mouseWorld.y - this.canvas.height / 2) * zoomDiff;
+    this.renderer.zoom = Math.max(0.2, Math.min(4, oldZoom * factor));
+
+    const worldAfter = this.renderer.screenToWorld(mousePos.x, mousePos.y);
+    this.renderer.panX += (worldAfter.x - worldBefore.x) * this.renderer.zoom;
+    this.renderer.panY += (worldAfter.y - worldBefore.y) * this.renderer.zoom;
+    this.renderer.clampPan();
   }
 
   eraseAtPosition(worldPos) {
     const elements = this.simulator.staticElements;
     const eraseRadius = this.brushSize + 10;
-    
+
     for (let i = elements.length - 1; i >= 0; i--) {
       const el = elements[i];
-      if (el.type === 'spawner') continue;
-      
+      if (el.type === 'spawner' || el.type === 'arena_boundary') continue;
+
       let hits = false;
-      for (const p of el.points) {
-        if (Math.hypot(p.x - worldPos.x, p.y - worldPos.y) < eraseRadius) {
-          hits = true;
-          break;
+
+      if (el.type === 'shape') {
+        if (el.shape === 'rect') {
+          const x = Math.min(el.geom.x, el.geom.x + el.geom.w);
+          const y = Math.min(el.geom.y, el.geom.y + el.geom.h);
+          const w = Math.abs(el.geom.w);
+          const h = Math.abs(el.geom.h);
+          const px = Math.max(x, Math.min(worldPos.x, x + w));
+          const py = Math.max(y, Math.min(worldPos.y, y + h));
+          if (Math.hypot(worldPos.x - px, worldPos.y - py) < eraseRadius) {
+            hits = true;
+          }
+        } else if (el.shape === 'circle') {
+          const d = Math.hypot(worldPos.x - el.geom.cx, worldPos.y - el.geom.cy);
+          if (d < el.geom.r + eraseRadius) {
+            hits = true;
+          }
         }
-      }
-      
-      if (!hits) {
-        for (let j = 0; j < el.points.length - 1; j++) {
-          const p1 = el.points[j];
-          const p2 = el.points[j+1];
-          const distToSeg = this.distToSegment(worldPos, p1, p2);
-          if (distToSeg < eraseRadius) {
+      } else if (el.points) {
+        for (const p of el.points) {
+          if (Math.hypot(p.x - worldPos.x, p.y - worldPos.y) < eraseRadius) {
             hits = true;
             break;
+          }
+        }
+        if (!hits) {
+          for (let j = 0; j < el.points.length - 1; j++) {
+            const p1 = el.points[j];
+            const p2 = el.points[j + 1];
+            if (this.distToSegment(worldPos, p1, p2) < eraseRadius) {
+              hits = true;
+              break;
+            }
           }
         }
       }
@@ -859,30 +960,6 @@ export class UIManager {
     listEl.innerHTML = html;
   }
 
-  // --- Cloud Badging ---
-  updateCloudStatus() {
-    const menuBadge = document.getElementById('menu-firebase-badge');
-    const syncBtn = document.getElementById('menu-btn-cloud');
-    
-    if (isFirebaseConnected()) {
-      if (menuBadge) {
-        menuBadge.className = 'badge badge-online';
-        menuBadge.textContent = 'Cloud Sync On';
-      }
-      if (syncBtn) {
-        syncBtn.innerHTML = '<span class="btn-icon">⚙️</span> Cloud Connected';
-      }
-    } else {
-      if (menuBadge) {
-        menuBadge.className = 'badge badge-offline';
-        menuBadge.textContent = 'Offline';
-      }
-      if (syncBtn) {
-        syncBtn.innerHTML = '<span class="btn-icon">⚙️</span> Connect Cloud DB';
-      }
-    }
-  }
-
   async refreshMapsList() {
     const listEl = document.getElementById('shared-maps-list');
     if (!listEl) return;
@@ -903,74 +980,308 @@ export class UIManager {
       listEl.innerHTML = '<div class="no-data-msg">No tracks found. Clear the sandbox and draw your own!</div>';
       return;
     }
-    
+
     let html = '';
     maps.forEach((map) => {
       const dateStr = new Date(map.createdAt).toLocaleDateString();
-      const dbTag = map.isSample ? '[Sample]' : (map.synced ? '[Cloud]' : '[Local]');
-      
+      const dbTag = map.isSample ? '[Sample]' : '[Local]';
+
       html += `
         <div class="map-card" data-id="${map.id}">
+          <canvas class="map-thumb" data-id="${map.id}" width="180" height="110"></canvas>
           <div class="map-info">
             <span class="map-card-name">${map.name} <small style="color: var(--text-muted); font-size: 10px;">${dbTag}</small></span>
             <span class="map-card-creator">By ${map.creator} | ${dateStr}</span>
           </div>
           <div class="map-card-actions">
-            <button class="like-btn" data-id="${map.id}">
-              ❤️ <span class="like-count">${map.likes || 0}</span>
-            </button>
             <button class="action-btn primary-btn btn-load-map" data-id="${map.id}">
-              Load & Race
+              Load &amp; Race
             </button>
           </div>
         </div>
       `;
     });
-    
+
     listEl.innerHTML = html;
-    
+
+    // Render thumbnails
+    listEl.querySelectorAll('.map-thumb').forEach((canvas) => {
+      const id = canvas.dataset.id;
+      const map = this.loadedMaps.find(m => m.id === id);
+      if (map) this.drawMapPreview(canvas, map);
+    });
+
     // Bind click load & play actions
     listEl.querySelectorAll('.btn-load-map').forEach((btn) => {
       btn.addEventListener('click', () => {
         const id = btn.dataset.id;
         const targetMap = this.loadedMaps.find(m => m.id === id);
-        if (targetMap) {
-          if (this.bgCheckInterval) clearInterval(this.bgCheckInterval);
-          
-          this.simulator.loadMap(targetMap);
-          document.getElementById('arena-track-title').textContent = targetMap.name;
-          
-          // Pop the Racer selector modal overlay
-          document.getElementById('screen-racer-picker').classList.remove('hidden');
-          
-          this.showToast(`Track Loaded: "${targetMap.name}"`);
-        }
-      });
-    });
+        if (!targetMap) return;
 
-    listEl.querySelectorAll('.like-btn').forEach((btn) => {
-      btn.addEventListener('click', async (e) => {
-        e.stopPropagation();
-        const id = btn.dataset.id;
-        const success = await likeMap(id);
-        if (success) {
-          btn.classList.add('liked');
-          const countEl = btn.querySelector('.like-count');
-          countEl.textContent = parseInt(countEl.textContent) + 1;
-        } else {
-          this.showToast("You've already liked this track!");
+        // Multiplayer map-picking flow (host selects map for room)
+        if (this.mpPickingMap && this.mp && this.mp.isHost) {
+          this.mp.setMap(id);
+          this.mpCurrentMap = targetMap;
+          this.mpPickingMap = false;
+          this.changeScreen('menu');
+          document.getElementById('mp-modal').classList.remove('hidden');
+          document.getElementById('mp-status').textContent = `Map locked: ${targetMap.name}`;
+          this.refreshMpLobby();
+          return;
         }
+
+        if (this.bgCheckInterval) clearInterval(this.bgCheckInterval);
+        this.simulator.loadMap(targetMap);
+        document.getElementById('arena-track-title').textContent = targetMap.name;
+        document.getElementById('screen-racer-picker').classList.remove('hidden');
+        this.showToast(`Track Loaded: "${targetMap.name}"`);
       });
     });
   }
 
+  // Render a scaled-down preview of a map onto a small canvas
+  drawMapPreview(canvas, map) {
+    const ctx = canvas.getContext('2d');
+    const w = canvas.width;
+    const h = canvas.height;
+
+    ctx.fillStyle = '#7b92ff';
+    ctx.fillRect(0, 0, w, h);
+
+    // Compute element bounds
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    map.elements.forEach((el) => {
+      if (el.type === 'spawner') {
+        minX = Math.min(minX, el.x - 20); minY = Math.min(minY, el.y - 20);
+        maxX = Math.max(maxX, el.x + 20); maxY = Math.max(maxY, el.y + 20);
+      } else if (el.type === 'shape') {
+        if (el.shape === 'rect') {
+          const x = Math.min(el.geom.x, el.geom.x + el.geom.w);
+          const y = Math.min(el.geom.y, el.geom.y + el.geom.h);
+          const ww = Math.abs(el.geom.w);
+          const hh = Math.abs(el.geom.h);
+          minX = Math.min(minX, x); minY = Math.min(minY, y);
+          maxX = Math.max(maxX, x + ww); maxY = Math.max(maxY, y + hh);
+        } else if (el.shape === 'circle') {
+          minX = Math.min(minX, el.geom.cx - el.geom.r);
+          minY = Math.min(minY, el.geom.cy - el.geom.r);
+          maxX = Math.max(maxX, el.geom.cx + el.geom.r);
+          maxY = Math.max(maxY, el.geom.cy + el.geom.r);
+        }
+      } else if (el.points) {
+        el.points.forEach((p) => {
+          minX = Math.min(minX, p.x); minY = Math.min(minY, p.y);
+          maxX = Math.max(maxX, p.x); maxY = Math.max(maxY, p.y);
+        });
+      }
+    });
+
+    if (!isFinite(minX)) return;
+
+    const pad = 20;
+    const srcW = (maxX - minX) + pad * 2;
+    const srcH = (maxY - minY) + pad * 2;
+    const scale = Math.min(w / srcW, h / srcH);
+    const offX = (w - srcW * scale) / 2 - (minX - pad) * scale;
+    const offY = (h - srcH * scale) / 2 - (minY - pad) * scale;
+
+    ctx.save();
+    ctx.translate(offX, offY);
+    ctx.scale(scale, scale);
+
+    map.elements.forEach((el) => {
+      if (el.type === 'spawner') {
+        ctx.fillStyle = '#ffe600';
+        ctx.beginPath();
+        ctx.arc(el.x, el.y, (el.radius || 15), 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#000';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      } else if (el.type === 'shape') {
+        let fill = '#000';
+        if (el.category === 'goal') fill = '#39ff14';
+        else if (el.category === 'hazard') fill = '#ff3366';
+        ctx.fillStyle = fill;
+        if (el.shape === 'rect') {
+          const x = Math.min(el.geom.x, el.geom.x + el.geom.w);
+          const y = Math.min(el.geom.y, el.geom.y + el.geom.h);
+          ctx.fillRect(x, y, Math.abs(el.geom.w), Math.abs(el.geom.h));
+        } else if (el.shape === 'circle') {
+          ctx.beginPath();
+          ctx.arc(el.geom.cx, el.geom.cy, el.geom.r, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      } else if (el.points && el.points.length >= 2) {
+        ctx.beginPath();
+        ctx.moveTo(el.points[0].x, el.points[0].y);
+        for (let i = 1; i < el.points.length; i++) {
+          ctx.lineTo(el.points[i].x, el.points[i].y);
+        }
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.lineWidth = (el.thickness || 12);
+        if (el.type === 'wall') ctx.strokeStyle = '#000';
+        else if (el.type === 'goal') ctx.strokeStyle = '#39ff14';
+        else if (el.type === 'hazard') ctx.strokeStyle = '#ff3366';
+        else ctx.strokeStyle = '#000';
+        ctx.stroke();
+      }
+    });
+
+    ctx.restore();
+
+    ctx.strokeStyle = 'rgba(0,0,0,0.5)';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(1, 1, w - 2, h - 2);
+  }
+
   filterMapsList(query) {
     if (!this.loadedMaps) return;
-    const filtered = this.loadedMaps.filter(m => 
-      m.name.toLowerCase().includes(query) || 
+    const filtered = this.loadedMaps.filter(m =>
+      m.name.toLowerCase().includes(query) ||
       m.creator.toLowerCase().includes(query)
     );
     this.renderMapsList(filtered);
+  }
+
+  // --- Multiplayer ---
+  connectMultiplayer(name, room) {
+    if (this.mp) this.mp.close();
+    localStorage.setItem('mp_name', name);
+
+    const status = document.getElementById('mp-status');
+    status.textContent = `Connecting to room "${room}" ...`;
+
+    this.mp = new MultiplayerClient({
+      room,
+      name,
+      marbleName: this.selectedRacer.name,
+      color: this.selectedRacer.color,
+      onWelcome: (m) => this.onMpWelcome(m),
+      onPlayerJoined: (m) => this.onMpPlayerJoined(m),
+      onPlayerLeft: (id) => this.onMpPlayerLeft(id),
+      onPos: (m) => this.onMpPos(m),
+      onMapSet: (mapId) => this.onMpMapSet(mapId),
+      onStart: (at) => this.onMpStart(at),
+      onReset: () => this.onMpReset(),
+      onHostChanged: () => this.refreshMpLobby(),
+      onError: (e) => { status.textContent = 'Connection error. Check console.'; console.error(e); }
+    });
+
+    this.renderer.localPlayerName = name;
+  }
+
+  onMpWelcome(msg) {
+    document.getElementById('mp-status').textContent =
+      `Connected as ${this.mp.isHost ? 'HOST' : 'guest'}. Room code: ${this.mp.room}`;
+    document.getElementById('mp-lobby').classList.remove('hidden');
+    document.getElementById('mp-btn-start').disabled = !this.mp.isHost;
+    document.getElementById('mp-btn-pickmap').disabled = !this.mp.isHost;
+    // Unlock full marble palette for MP so both players can pick different colors
+    this.buildRacerPickerList();
+
+    // Hydrate remote marbles from existing players
+    this.simulator.clearRemoteMarbles();
+    msg.players.forEach((p) => {
+      if (p.id !== this.mp.myId) {
+        this.simulator.upsertRemoteMarble(p.id, {
+          id: p.id, name: p.name, marbleName: p.marbleName, color: p.color,
+          x: p.x || 0, y: p.y || 0, targetX: p.x || 0, targetY: p.y || 0
+        });
+      }
+    });
+
+    if (msg.mapId) this.mpLoadMapById(msg.mapId);
+    this.refreshMpLobby();
+  }
+
+  onMpPlayerJoined(p) {
+    this.simulator.upsertRemoteMarble(p.id, {
+      id: p.id, name: p.name, marbleName: p.marbleName, color: p.color,
+      x: 0, y: 0, targetX: 0, targetY: 0
+    });
+    this.refreshMpLobby();
+    this.showToast(`${p.name} joined`);
+  }
+
+  onMpPlayerLeft(id) {
+    this.simulator.removeRemoteMarble(id);
+    this.refreshMpLobby();
+  }
+
+  onMpPos(msg) {
+    this.simulator.setRemoteMarbleTarget(msg.id, msg.x, msg.y, msg.vx, msg.vy);
+  }
+
+  async mpLoadMapById(mapId) {
+    const maps = await fetchAllMaps();
+    const target = maps.find(m => m.id === mapId);
+    if (!target) return;
+    this.mpCurrentMap = target;
+    document.getElementById('mp-status').textContent = `Map: ${target.name}. Waiting for host to start...`;
+  }
+
+  onMpMapSet(mapId) {
+    this.mpLoadMapById(mapId);
+  }
+
+  onMpStart(at) {
+    document.getElementById('mp-modal').classList.add('hidden');
+    if (!this.mpCurrentMap) return;
+
+    if (this.bgCheckInterval) clearInterval(this.bgCheckInterval);
+    this.simulator.loadMap(this.mpCurrentMap);
+    document.getElementById('arena-track-title').textContent = this.mpCurrentMap.name + ' [MP]';
+    this.changeScreen('arena');
+
+    // Wait until startAt then unpause
+    const wait = Math.max(0, at - Date.now());
+    setTimeout(() => {
+      this.simulator.isPaused = false;
+      if (this.simulator.spawnGate && !this.simulator.spawnGate.isOpen) {
+        this.simulator.scheduleGateOpen(3000);
+      }
+      this.startMpBroadcast();
+    }, wait);
+  }
+
+  onMpReset() {
+    if (this.mpBroadcastInterval) clearInterval(this.mpBroadcastInterval);
+    this.simulator.isPaused = true;
+    this.changeScreen('menu');
+  }
+
+  refreshMpLobby() {
+    if (!this.mp) return;
+    const listEl = document.getElementById('mp-player-list');
+    listEl.innerHTML = '';
+    const me = document.createElement('li');
+    me.textContent = `${document.getElementById('mp-name').value || 'You'} (you${this.mp.isHost ? ', host' : ''})`;
+    listEl.appendChild(me);
+    this.simulator.remoteMarbles.forEach((r) => {
+      const li = document.createElement('li');
+      li.textContent = r.name;
+      listEl.appendChild(li);
+    });
+    document.getElementById('mp-btn-start').disabled = !this.mp.isHost || !this.mpCurrentMap;
+    document.getElementById('mp-btn-pickmap').disabled = !this.mp.isHost;
+  }
+
+  startMpBroadcast() {
+    if (this.mpBroadcastInterval) clearInterval(this.mpBroadcastInterval);
+    this.mpBroadcastInterval = setInterval(() => {
+      if (!this.mp) { clearInterval(this.mpBroadcastInterval); return; }
+      const own = this.simulator.marbles.find(m => m.isPlayer);
+      if (own) {
+        this.mp.sendPos(
+          own.position.x,
+          own.position.y,
+          own.velocity.x,
+          own.velocity.y
+        );
+      }
+    }, 50);
   }
 
   showToast(message) {
