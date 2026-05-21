@@ -272,6 +272,10 @@ export class CanvasRenderer {
         this.drawShape(el);
         return;
       }
+      if (el.type === 'standings_structure') {
+        this.drawStandingsStructure(el);
+        return;
+      }
 
       const { points, thickness } = el;
       if (points.length < 2) return;
@@ -385,6 +389,65 @@ export class CanvasRenderer {
     ctx.lineWidth = 4;
     ctx.strokeStyle = '#000000';
     ctx.strokeRect(el.x, el.y, el.width, el.height);
+    ctx.restore();
+  }
+
+  drawStandingsStructure(el) {
+    const { ctx } = this;
+    const x = el.x; // 1220
+    const y = el.y; // 420
+    
+    ctx.save();
+    
+    // Draw background for standings slots
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.12)';
+    ctx.fillRect(x, y, 320, 200);
+
+    // Draw background for first 3 slots (Gold, Silver, Bronze highlights)
+    const slotColors = ['rgba(255, 215, 0, 0.25)', 'rgba(192, 192, 192, 0.25)', 'rgba(205, 127, 50, 0.25)'];
+    for (let i = 0; i < 3; i++) {
+      ctx.fillStyle = slotColors[i];
+      ctx.fillRect(x + i * 32, y, 32, 200);
+    }
+    
+    // Draw background for Eliminated box
+    ctx.fillStyle = 'rgba(255, 51, 102, 0.08)';
+    ctx.fillRect(x, y + 280, 320, 150);
+
+    // Draw physical walls (loop through bodies and render them)
+    ctx.fillStyle = '#1e2530';
+    ctx.strokeStyle = '#0a0d14';
+    ctx.lineWidth = 1.5;
+    
+    if (el.bodies) {
+      el.bodies.forEach((body) => {
+        const w = body.bounds.max.x - body.bounds.min.x;
+        const h = body.bounds.max.y - body.bounds.min.y;
+        ctx.fillRect(body.position.x - w/2, body.position.y - h/2, w, h);
+        ctx.strokeRect(body.position.x - w/2, body.position.y - h/2, w, h);
+      });
+    }
+
+    // Draw Slot Labels (1st, 2nd, 3rd, etc.)
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 9px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    
+    const suffixes = ['st', 'nd', 'rd', 'th', 'th', 'th', 'th', 'th', 'th', 'th'];
+    for (let i = 0; i < 10; i++) {
+      const sx = x + i * 32 + 16;
+      ctx.fillText(`${i + 1}${suffixes[i]}`, sx, y + 212);
+    }
+
+    // Draw Section Titles
+    ctx.font = 'bold 14px sans-serif';
+    ctx.fillStyle = '#ffe600';
+    ctx.fillText('STANDINGS HOLD', x + 160, y - 18);
+    
+    ctx.fillStyle = '#ff3366';
+    ctx.fillText('ELIMINATED AREA', x + 160, y + 265);
+
     ctx.restore();
   }
 

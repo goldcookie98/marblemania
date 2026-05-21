@@ -146,8 +146,9 @@ export class PhysicsSimulator {
     // Create a rotating physical body under the spawner to throw marbles
     this.spawnerBody = Bodies.circle(this.spawner.x, this.spawner.y, this.spawner.radius || 15, {
       isStatic: true,
-      friction: 0.8,
-      restitution: 0.45,
+      friction: 1.0,
+      frictionStatic: 1.0,
+      restitution: 0.2,
       label: 'spawner_body'
     });
     World.add(this.world, this.spawnerBody);
@@ -196,10 +197,35 @@ export class PhysicsSimulator {
     
     this.finishedMarbles.push(record);
     
-    // Set marble category/group to not collide with anything anymore, or just slow it down
-    // Let's make it a sensor or floaty so it stops racing but stays visible
-    Body.setVelocity(marbleBody, { x: 0, y: -0.5 });
-    marbleBody.isSensor = true;
+    const rank = record.rank;
+    const totalMarbles = this.marbles.length;
+
+    let targetX, targetY;
+    
+    // If only 1 marble is racing (e.g. Test Marble in editor), it goes to slot 1
+    if (totalMarbles === 1) {
+      targetX = 1220 + 16;
+      targetY = 380;
+    } else {
+      // If it is the last marble, or rank is > 10, it is eliminated
+      const isEliminated = (rank === totalMarbles) || (rank > 10);
+      if (isEliminated) {
+        targetX = 1220 + 20 + Math.random() * 280;
+        targetY = 660 + Math.random() * 20;
+      } else {
+        // Go to its standing slot
+        targetX = 1220 + (rank - 1) * 32 + 16;
+        targetY = 380;
+      }
+    }
+
+    // Teleport and reset velocities
+    Body.setPosition(marbleBody, { x: targetX, y: targetY });
+    Body.setVelocity(marbleBody, { x: 0, y: 1 });
+    Body.setAngularVelocity(marbleBody, 0);
+
+    // Keep it physical but change label to avoid duplicate goal/hazard triggers
+    marbleBody.label = 'finished_marble';
     
     if (this.onGoalReached) {
       this.onGoalReached(record, marbleBody.position);
@@ -227,11 +253,11 @@ export class PhysicsSimulator {
     }
   }
 
-  // Build 4 static walls along the arena rectangle perimeter
+  // Build 4 static walls along the arena rectangle perimeter and the standings structure
   setupArenaBoundary(width, height) {
-    // Remove prior boundary bodies
+    // Remove prior boundary and standings structure bodies
     this.staticElements = this.staticElements.filter((el) => {
-      if (el.type === 'arena_boundary') {
+      if (el.type === 'arena_boundary' || el.type === 'standings_structure') {
         if (el.bodies) el.bodies.forEach(b => World.remove(this.world, b));
         return false;
       }
@@ -260,6 +286,64 @@ export class PhysicsSimulator {
       width,
       height,
       bodies
+    });
+
+    // Standings & Eliminated Area structure on the right side
+    const sx = 1220;
+    const sy = 420;
+    const standingsBodies = [];
+
+    // Bottom shelf of standings slots
+    const bottomShelf = Bodies.rectangle(sx + 160, sy + 200, 324, 8, {
+      isStatic: true,
+      friction: 0.1,
+      restitution: 0.3,
+      label: 'standings_wall'
+    });
+    standingsBodies.push(bottomShelf);
+
+    // 11 vertical dividers for 10 slots
+    for (let i = 0; i <= 10; i++) {
+      const divider = Bodies.rectangle(sx + i * 32, sy + 100, 4, 200, {
+        isStatic: true,
+        friction: 0.1,
+        restitution: 0.3,
+        label: 'standings_wall'
+      });
+      standingsBodies.push(divider);
+    }
+
+    // Eliminated Area container below standings
+    const elimBottom = Bodies.rectangle(sx + 160, sy + 430, 324, 8, {
+      isStatic: true,
+      friction: 0.1,
+      restitution: 0.3,
+      label: 'standings_wall'
+    });
+    const elimLeft = Bodies.rectangle(sx, sy + 350, 4, 160, {
+      isStatic: true,
+      friction: 0.1,
+      restitution: 0.3,
+      label: 'standings_wall'
+    });
+    const elimRight = Bodies.rectangle(sx + 320, sy + 350, 4, 160, {
+      isStatic: true,
+      friction: 0.1,
+      restitution: 0.3,
+      label: 'standings_wall'
+    });
+    standingsBodies.push(elimBottom, elimLeft, elimRight);
+
+    // Add all to world
+    standingsBodies.forEach(b => World.add(this.world, b));
+
+    this.staticElements.push({
+      type: 'standings_structure',
+      x: sx,
+      y: sy,
+      width: 320,
+      height: 430,
+      bodies: standingsBodies
     });
   }
 
@@ -474,7 +558,8 @@ export class PhysicsSimulator {
 
       const marble = Bodies.circle(spawnX, spawnY, radius, {
         restitution: 0.3,
-        friction: 0.15,
+        friction: 0.9,
+        frictionStatic: 1.0,
         frictionAir: 0.012,
         density: 0.008,
         label: 'marble'
@@ -503,11 +588,11 @@ export class PhysicsSimulator {
   undo() {
     if (this.staticElements.length === 0) return;
 
-    // Find the last drawn path/spawner that is not the default spawner or arena boundary
+    // Find the last drawn path/spawner that is not the default spawner, arena boundary, or standings structure
     let lastIdx = -1;
     for (let i = this.staticElements.length - 1; i >= 0; i--) {
       const el = this.staticElements[i];
-      if (el.type === 'arena_boundary') continue;
+      if (el.type === 'arena_boundary' || el.type === 'standings_structure') continue;
       if (el.type === 'spawner' && this.staticElements.filter(e => e.type === 'spawner').length <= 1) continue;
       lastIdx = i;
       break;
@@ -529,7 +614,7 @@ export class PhysicsSimulator {
   clearAll() {
     const preserved = [];
     this.staticElements.forEach((el) => {
-      if (el.type === 'arena_boundary') {
+      if (el.type === 'arena_boundary' || el.type === 'standings_structure') {
         preserved.push(el);
         return;
       }
@@ -582,7 +667,7 @@ export class PhysicsSimulator {
   exportMap() {
     const out = [];
     this.staticElements.forEach((el) => {
-      if (el.type === 'arena_boundary') return;
+      if (el.type === 'arena_boundary' || el.type === 'standings_structure') return;
       if (el.type === 'spawner') {
         out.push({ type: 'spawner', x: el.x, y: el.y, radius: el.radius });
       } else if (el.type === 'cog') {
@@ -734,6 +819,53 @@ export class PhysicsSimulator {
     const newAngle = this.spawnerBody.angle + omega * dt;
     Body.setAngle(this.spawnerBody, newAngle);
     Body.setAngularVelocity(this.spawnerBody, omega);
+
+    // Apply manual tangential friction/traction transfer to the marbles.
+    // This simulates high-friction rolling grip and flings marbles correctly.
+    const spawnerRadius = this.spawner.radius || 15;
+    const marbleRadius = 10;
+    const contactThreshold = spawnerRadius + marbleRadius + 3.0; // slight buffer for overlap
+    
+    this.marbles.forEach((marble) => {
+      if (marble.finished) return;
+      const dx = marble.position.x - this.spawner.x;
+      const dy = marble.position.y - this.spawner.y;
+      const dist = Math.hypot(dx, dy);
+      
+      if (dist > 0.1 && dist <= contactThreshold) {
+        // Normal direction from spawner center to marble center
+        const nx = dx / dist;
+        const ny = dy / dist;
+        
+        // Tangent direction (clockwise)
+        const tx = -ny;
+        const ty = nx;
+        
+        // Linear velocity of the spawner surface
+        const surfaceSpeed = omega * spawnerRadius;
+        
+        // Get marble's current tangent velocity component
+        const currentTangentSpeed = marble.velocity.x * tx + marble.velocity.y * ty;
+        const speedDifference = surfaceSpeed - currentTangentSpeed;
+        
+        // Adjust velocity to match the spawner's surface speed
+        const speedCorrection = speedDifference * 0.35;
+        
+        Body.setVelocity(marble, {
+          x: marble.velocity.x + tx * speedCorrection,
+          y: marble.velocity.y + ty * speedCorrection
+        });
+        
+        // Prevent marble from clipping into the spawner body under high gravity
+        const overlap = (spawnerRadius + marbleRadius) - dist;
+        if (overlap > 0) {
+          Body.setPosition(marble, {
+            x: marble.position.x + nx * overlap * 0.2,
+            y: marble.position.y + ny * overlap * 0.2
+          });
+        }
+      }
+    });
   }
 
   // Tick step called by the canvas requestAnimationFrame loop
