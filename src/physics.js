@@ -426,7 +426,7 @@ export class PhysicsSimulator {
     this.raceStartTime = Date.now();
 
     const radius = 10;
-    const useGate = !this.menuMode;
+    const useGate = false; // Disable starting box gate completely
     const gateRadius = Math.max(45, 14 + Math.ceil(Math.sqrt(count)) * 16);
 
     if (useGate) {
