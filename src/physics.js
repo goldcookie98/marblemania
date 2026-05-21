@@ -441,7 +441,7 @@ export class PhysicsSimulator {
     this.raceStartTime = Date.now();
 
     const radius = 10;
-    const useGate = false; // Disable starting box gate completely
+    const useGate = !this.menuMode; // Enable starting box gate in race mode
     const gateRadius = Math.max(45, 14 + Math.ceil(Math.sqrt(count)) * 16);
 
     if (useGate) {
@@ -473,10 +473,10 @@ export class PhysicsSimulator {
       }
 
       const marble = Bodies.circle(spawnX, spawnY, radius, {
-        restitution: 0.45,
+        restitution: 0.3,
         friction: 0.15,
-        frictionAir: 0.001,
-        density: 0.001,
+        frictionAir: 0.012,
+        density: 0.008,
         label: 'marble'
       });
 
